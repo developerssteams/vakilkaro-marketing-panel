@@ -1,0 +1,13 @@
+VakilKaro Marketing Panel
+
+1. Extract ZIP
+2. Open terminal in VakilKaro-Marketing-Panel
+3. npm i
+4. npm run dev
+5. Open http://localhost:3000
+
+Default login:
+User ID: VKADMIN
+Password: VakilKaro@123
+
+Database is NOT required for default login or Marketing module CRUD in this version.

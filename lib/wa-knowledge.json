@@ -1,0 +1,1460 @@
+{
+ "company": "VakilKaro (Jsons Solicitors Pvt. Ltd.)",
+ "website": "https://vakilkaro.com",
+ "services": [
+  {
+   "name": "Trademark (Logo/Word/Slogan/Tagline/Product) Application",
+   "category": "Intellectual Property",
+   "starting_price": 6498,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Authorized Person KYC (PAN, Aadhar Card, Mobile Number, Email ID)",
+    "Brand Name/Logo",
+    "Nature of Business",
+    "Goods & Service Description"
+   ],
+   "packages": [
+    {
+     "name": "Smart",
+     "price": 16498,
+     "popular": false
+    },
+    {
+     "name": "Basic",
+     "price": 8498,
+     "popular": false
+    },
+    {
+     "name": "Standard",
+     "price": 7499,
+     "popular": false
+    },
+    {
+     "name": "Don't Worry",
+     "price": 22499,
+     "popular": false
+    },
+    {
+     "name": "Trust Plus",
+     "price": 12998,
+     "popular": false
+    },
+    {
+     "name": "Rescue",
+     "price": 11998,
+     "popular": false
+    }
+   ]
+  },
+  {
+   "name": "Trademark Objection Reply",
+   "category": "Intellectual Property",
+   "starting_price": 1999,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Trademark Opposition Filing",
+   "category": "Intellectual Property",
+   "starting_price": 7599,
+   "gst_percent": 18,
+   "timeline_days": "5-7",
+   "deliverables": [],
+   "documents_required": [
+    "Trademark Application Number",
+    "Power of Attoerny ( TM - 48 )",
+    "Trademark Usage Evidences if Any"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Trademark Renewal",
+   "category": "Intellectual Property",
+   "starting_price": 11999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [
+    "Trademark Application Number",
+    "Power of Attoreny ( TM 48 )"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Trademark Counter Statement",
+   "category": "Intellectual Property",
+   "starting_price": 7599,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [
+    "Oldest/first invoices issued under the AURIK brand",
+    "GST sales/purchase records, if available",
+    "Old packaging, labels or product photographs showing AURIK",
+    "Logo/design-related old files, designer chats, emails or invoices",
+    "Website/domain registration details, if any",
+    "Oldest Instagram, Facebook or YouTube posts related to AURIK",
+    "Amazon, Flipkart or other marketplace listing details, if applicable",
+    "Old Meta/Google advertisement records or invoices, if any"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Trademark Assignment/Transfer",
+   "category": "Intellectual Property",
+   "starting_price": 11999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Copyright Registration",
+   "category": "Intellectual Property",
+   "starting_price": 2999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Copyright Objection & Response",
+   "category": "Intellectual Property",
+   "starting_price": 2499,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Income Tax Return (ITR-1/2/3/4/5/6/7) Filing",
+   "category": "Tax & Compliance Department",
+   "starting_price": 1000,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [
+    "ITR Acknowledgement",
+    "Computation"
+   ],
+   "documents_required": [
+    "PAN Card,",
+    "Aadhaar Card,",
+    "Bank Statement,",
+    "Mobile No",
+    "Email ID,",
+    "Form 16 (If Available)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Tax Audit under Section 44AB",
+   "category": "Tax & Compliance Department",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "TDS Return Filing",
+   "category": "Tax & Compliance Department",
+   "starting_price": 2499,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "GST Return Filing",
+   "category": "Tax & Compliance Department",
+   "starting_price": 500,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Professional Tax Filing",
+   "category": "Tax & Compliance Department",
+   "starting_price": 999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Balance Sheet Preparation",
+   "category": "Tax & Compliance Department",
+   "starting_price": 2499,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Bank statement from 1st April to 31st March",
+    "List of sales during the year",
+    "List of purchase during the year  (Details wise seprately)",
+    "List of all Assets with amount, like computer, Furniture, Mobile, etc.",
+    "GST login credentials (if available)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Private Limited Company Annual Compliance Filing",
+   "category": "Tax & Compliance Department",
+   "starting_price": 14999,
+   "gst_percent": 18,
+   "timeline_days": "7-10",
+   "deliverables": [],
+   "documents_required": [
+    "Bank statement of company's current account from 1st April to 31st March",
+    "List of sales during the year",
+    "List of purchase during the year",
+    "List of Expenses paid with amount, like salary, advertisement, electricity bill etc.",
+    "List of all Assets with amount like Computer, Furniture, Mobile, Automobiles etc.",
+    "GST login credentials (if available)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Accounting & Bookkeeping",
+   "category": "Tax & Compliance Department",
+   "starting_price": 1999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "GST Return Filing",
+   "category": "Tax & Compliance Department",
+   "starting_price": 899,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Private Limited Company Registration",
+   "category": "Registration & License",
+   "starting_price": 11999,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [],
+   "documents_required": [
+    "KYC of at least 2 members (Pan, Adhaar, Photo, Bank statements, Mobile No., Email ID)",
+    "DIN if available",
+    "Two Company Names (Unique and meaningful)",
+    "Shareholding ratios of shareholders persons",
+    "Authorized and Paid-up Capital",
+    "Rent Agreement with An Electricity bill or any address proof for the office address"
+   ],
+   "packages": [
+    {
+     "name": "Smart USP",
+     "price": 19999,
+     "popular": true
+    },
+    {
+     "name": "Basic",
+     "price": 11999,
+     "popular": false
+    },
+    {
+     "name": "Don't Worry",
+     "price": 29999,
+     "popular": false
+    },
+    {
+     "name": "Master",
+     "price": 39999,
+     "popular": false
+    },
+    {
+     "name": "Startup Tech Plus",
+     "price": 19899,
+     "popular": false
+    }
+   ]
+  },
+  {
+   "name": "Public Limited Company Registration",
+   "category": "Registration & License",
+   "starting_price": 7140,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [
+    "Name Approval Letter",
+    "Certificate of Registration",
+    "MOA (Memorandum of Association)",
+    "AOA (Articles of Association)",
+    "DIN of Directors",
+    "DSC of Directors",
+    "PAN & TAN of the Company",
+    "Bank account Opening Support documents"
+   ],
+   "documents_required": [
+    "KYC of at least 7 members (Pan, Adhaar, Photo, Bank statements, Mobile No., Email ID)",
+    "DIN if available",
+    "Two Company Names (Unique and meaningful)",
+    "Shareholding ratios of shareholders",
+    "Authorized and Paid-up Capital",
+    "Rent Agreement with An Electricity bill or any address proof for the office address"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Section 8 Company (NGO) Registration",
+   "category": "Registration & License",
+   "starting_price": 11999,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [],
+   "documents_required": [
+    "KYC of at least 2 members (Pan, Adhaar, Photo, Bank statements, Mobile No., Email ID)",
+    "DIN if available",
+    "Two Company Names (Unique and meaningful)",
+    "Shareholding ratios of shareholders",
+    "Authorized and Paid-up Capital",
+    "Rent Agreement with An Electricity bill or any address proof for the office address"
+   ],
+   "packages": [
+    {
+     "name": "Basic",
+     "price": 11999,
+     "popular": false
+    },
+    {
+     "name": "Smart USP",
+     "price": 16999,
+     "popular": true
+    },
+    {
+     "name": "Don't Worry",
+     "price": 24999,
+     "popular": false
+    },
+    {
+     "name": "Master",
+     "price": 34999,
+     "popular": false
+    }
+   ]
+  },
+  {
+   "name": "Limited Liability Partnership (LLP) Registration",
+   "category": "Registration & License",
+   "starting_price": 7330,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [
+    "Name Approval Letter",
+    "Certificate of Registration",
+    "LLP Drafted Deed",
+    "DPIN of Partners",
+    "DSC of Partners",
+    "PAN & TAN of the LLP",
+    "Bank account Opening Support documents",
+    "Master Data"
+   ],
+   "documents_required": [
+    "KYC of at least 2 members (Pan, Adhaar, Photo, Bank statements, Mobile No., Email ID)",
+    "DPIN if available",
+    "Two LLP Names (Unique and meaningful)",
+    "Contribution ratios of partners",
+    "Contribution Amount",
+    "Rent Agreement with An Electricity bill or any address proof for the office address"
+   ],
+   "packages": [
+    {
+     "name": "Basic",
+     "price": 17330,
+     "popular": false
+    }
+   ]
+  },
+  {
+   "name": "Partnership Firm Registration",
+   "category": "Registration & License",
+   "starting_price": 7109,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [
+    "LLP Drafted Deed",
+    "PAN & TAN of the Firm",
+    "GST Certificate",
+    "Bank account Opening Support documents"
+   ],
+   "documents_required": [
+    "KYC of at least 2 members (PAN, Aadhaar, Photo, Bank statements, Mobile No., Email ID)",
+    "Two firm names (Unique and meaningful)",
+    "Contribution ratios of partners",
+    "Contribution Amount",
+    "Rent Agreement with An Electricity bill or any address proof for the office address"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Sole Proprietorship Registration",
+   "category": "Registration & License",
+   "starting_price": 2999,
+   "gst_percent": 18,
+   "timeline_days": "7-10",
+   "deliverables": [
+    "GST Certificate",
+    "MSME Certificate"
+   ],
+   "documents_required": [
+    "KYC of Proprietor (PAN, Aadhaar, Photo, Bank statements, Mobile No., Email ID)",
+    "firm name (Unique and meaningful)",
+    "Rent Agreement with An Electricity bill or any address proof for the office address"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Producer Company Registration",
+   "category": "Registration & License",
+   "starting_price": 10140,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [
+    "Name Approval Letter",
+    "Certificate of Registration",
+    "MOA (Memorandum of Association)",
+    "AOA (Articles of Association)",
+    "DIN of Directors",
+    "DSC of Directors",
+    "PAN & TAN of the Company",
+    "Bank account Opening Support documents"
+   ],
+   "documents_required": [
+    "KYC of at least 10 members (PAN, Aadhaar, Photo, Bank statements, Mobile No., Email ID)",
+    "DIN if available",
+    "Two Company Names (Unique and meaningful)",
+    "Farmer Certificate",
+    "Shareholding ratios of Shareholders",
+    "Authorized and Paid-up Capital",
+    "Rent Agreement with An Electricity bill or any address proof for the office address"
+   ],
+   "packages": []
+  },
+  {
+   "name": "NBFC Registration",
+   "category": "Registration & License",
+   "starting_price": 500000,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Trust Registration",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Society Registration",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Strike Off Company",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "LLP Closure",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Company Dormant Status",
+   "category": "Registration & License",
+   "starting_price": 2999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "GST Registration",
+   "category": "Registration & License",
+   "starting_price": 999,
+   "gst_percent": 18,
+   "timeline_days": "2-5",
+   "deliverables": [
+    "GST Certificate"
+   ],
+   "documents_required": [
+    "KYC of Proprietor (PAN, Aadhaar, Photo, Bank statements, Mobile No., Email ID)",
+    "firm name (Unique and meaningful)",
+    "Rent Agreement with An Electricity bill or any address proof for the office address"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Import Export Code (IEC)",
+   "category": "Registration & License",
+   "starting_price": 4499,
+   "gst_percent": 18,
+   "timeline_days": "2-5",
+   "deliverables": [
+    "Import Export Code (IEC) Certificate"
+   ],
+   "documents_required": [
+    "PAN Card",
+    "Identity Proof: Aadhaar, Passport, Voter ID, or Driving License",
+    "Business Address Proof: Electricity bill, telephone bill, rent/lease agreement, or sale deed",
+    "Bank Proof: Cancelled cheque bearing the pre-printed name of your business or an official bank certificate",
+    "Business Constitution: Certificate of Incorporation (for Companies/LLPs) or Partnership Deed"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Shop & Establishment License",
+   "category": "Registration & License",
+   "starting_price": 6499,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [
+    "Shop & Establishment License"
+   ],
+   "documents_required": [
+    "Photo ID: PAN card, Aadhaar card, Passport, or Driving License of the employer/proprietor",
+    "Employer's Photograph: Recent passport-size photograph of the employer or authorized signatory",
+    "Establishment Photograph: A clear photo of the shop/office showing the owner and the establishment's name board",
+    "Address Proof: Electricity bill or utility bill of the business premises",
+    "Property Proof: Copy of the registered Rent Agreement (if rented) or Ownership/Sale Deed/Property Tax receipt (if owned)",
+    "Business Constitution: Partnership deed, Incorporation Certificate, or Memorandum of Association (if applicable)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Udyam (MSME) Registration",
+   "category": "Registration & License",
+   "starting_price": 999,
+   "gst_percent": 18,
+   "timeline_days": "2-4",
+   "deliverables": [
+    "Udyam (MSME) Certificate"
+   ],
+   "documents_required": [
+    "Aadhaar Number",
+    "PAN of the individual for sole proprietorships or the business entity for companies/LLPs",
+    "GST Certificate",
+    "Business Address",
+    "Primary business activity",
+    "Investment & Turnover"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Professional Tax Registration",
+   "category": "Registration & License",
+   "starting_price": 999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Trade License",
+   "category": "Registration & License",
+   "starting_price": 2999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Factory License",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Labour License",
+   "category": "Registration & License",
+   "starting_price": 2999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Contractor License",
+   "category": "Registration & License",
+   "starting_price": 2999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "FSSAI Basic Registration",
+   "category": "Registration & License",
+   "starting_price": 1099,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [
+    "FSSAI Basic Certificate"
+   ],
+   "documents_required": [
+    "Passport-size photo of the applicant",
+    "Government-issued photo ID (Aadhaar, PAN, Voter ID, or Passport)",
+    "Business premise proof (Rent agreement, utility bill, or property tax receipt)",
+    "Business details: Nature of business and list of food products handled",
+    "Mobile Number and Email ID"
+   ],
+   "packages": []
+  },
+  {
+   "name": "FSSAI State License",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "20-30",
+   "deliverables": [
+    "FSSAI State License Certificate"
+   ],
+   "documents_required": [
+    "PAN, ADHAAR, Photo, Mobile Email of owner",
+    "The latest Utility Bill( Electricity / Water Bill)",
+    "Copy of Rent Agreement( if Rented property)",
+    "Copy of property paper (if owned property)",
+    "Proof of Income determining  the annual turnover of the food business operator",
+    "List of Partners/Proprietor/Executive Members of Society with complete address and contact details",
+    "Blueprint plan/layout plan of the processing unit installed capacity and horsepower used",
+    "Constitution of company MOA and AOA / Partnership Deed"
+   ],
+   "packages": []
+  },
+  {
+   "name": "FSSAI Central License",
+   "category": "Registration & License",
+   "starting_price": 9999,
+   "gst_percent": 18,
+   "timeline_days": "20-30",
+   "deliverables": [
+    "FSSAI Central License"
+   ],
+   "documents_required": [
+    "PAN, ADHAAR, Photo, Mobile Email of owner",
+    "The latest Utility Bill( Electricity / Water Bill)",
+    "Copy of Rent Agreement( if Rented property)",
+    "Copy of property paper (if owned property)",
+    "Proof of Income determining  the annual turnover of the food business operator",
+    "List of Partners/Proprietor/Executive Members of Society with complete address and contact details",
+    "Blueprint plan/layout plan of the processing unit installed capacity and horsepower used",
+    "Constitution of company MOA and AOA / Partnership Deed"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Startup India (DPIIT) Registration",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "7-10",
+   "deliverables": [
+    "Startup India (DPIIT) Certificate"
+   ],
+   "documents_required": [
+    "Certificate of Incorporation or Registration",
+    "PAN Card of the Entity",
+    "Business Details – Include your registered office address, date of incorporation, type of business, and main activities",
+    "Director/Partner/Promoter Information – Provide names, DIN or LLPIN (if applicable), and ID details of all the key members of your startup",
+    "Brief Description of Innovation or Unique Idea",
+    "Proof of Concept / Business Plan",
+    "Website link or product screenshots",
+    "Pitch deck or presentation"
+   ],
+   "packages": []
+  },
+  {
+   "name": "GEM (Government e-Marketplace) Registration",
+   "category": "Registration & License",
+   "starting_price": 9999,
+   "gst_percent": 18,
+   "timeline_days": "7-10",
+   "deliverables": [
+    "GEM (Government e-Marketplace) Registration"
+   ],
+   "documents_required": [
+    "Certificate of Incorporation or Registration",
+    "PAN Card of the Entity",
+    "Business Details – Include your registered office address, date of incorporation, type of business, and main activities",
+    "Director/Partner/Promoter Information – Provide names, DIN or LLPIN (if applicable), and ID details of all the key members of your startup",
+    "DPIIT Startup Certificate",
+    "Brief Description of Innovation or Unique Idea",
+    "Proof of Concept / Business Plan",
+    "Website link or product screenshots"
+   ],
+   "packages": []
+  },
+  {
+   "name": "APEDA Registration",
+   "category": "Registration & License",
+   "starting_price": 5000,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "RCMC (Registration-cum-Membership Certificate)",
+   "category": "Registration & License",
+   "starting_price": 1999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "12A Registration",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [],
+   "documents_required": [
+    "KYC of Authorise Persons ( Pan, Aadhaar, Photo, Mobile No., Email ID)",
+    "NGO's all documents like Certificate, MOA(By-law), AOA, PAN and Etc."
+   ],
+   "packages": []
+  },
+  {
+   "name": "80G Registration",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [],
+   "documents_required": [
+    "KYC of Authorise Persons ( Pan, Aadhaar, Photo, Mobile No., Email ID)",
+    "NGO's all documents like Certificate, MOA(By-law), AOA, PAN and Etc."
+   ],
+   "packages": []
+  },
+  {
+   "name": "CSR-1 Registration",
+   "category": "Registration & License",
+   "starting_price": 1999,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "KYC of Authorise Persons ( Pan, Aadhaar, Photo, Mobile No., Email ID)",
+    "NGO's all documents like Certificate, MOA(By-law), AOA, PAN and Etc."
+   ],
+   "packages": []
+  },
+  {
+   "name": "FCRA Registration",
+   "category": "Registration & License",
+   "starting_price": 24999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "FCRA Prior Approval",
+   "category": "Registration & License",
+   "starting_price": 19999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "DARPAN Registration",
+   "category": "Registration & License",
+   "starting_price": 999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "ISO 9001 – Quality Management System",
+   "category": "Registration & License",
+   "starting_price": 3999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [
+    "Company's Documents & Details",
+    "Company's Authorized Person's KYC",
+    "Any Sales or Purchage Invoice"
+   ],
+   "packages": []
+  },
+  {
+   "name": "ISO 14001 – Environmental Management System",
+   "category": "Registration & License",
+   "starting_price": 5999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "ISO 22000 – Food Safety Management System",
+   "category": "Registration & License",
+   "starting_price": 9999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "ISO 27001 – Information Security Management System",
+   "category": "Registration & License",
+   "starting_price": 11999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "ISO 45001 – Occupational Health & Safety Management System",
+   "category": "Registration & License",
+   "starting_price": 5999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "GMP Certification Assistance",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Digital Signature Certificate (DSC)",
+   "category": "Registration & License",
+   "starting_price": 1695,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "PAN & TAN Registration",
+   "category": "Registration & License",
+   "starting_price": 499,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "LEI (Legal Entity Identifier) Registration",
+   "category": "Registration & License",
+   "starting_price": 4999,
+   "gst_percent": 18,
+   "timeline_days": "3-3",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Section 8 Microfinance Company Registration",
+   "category": "Registration & License",
+   "starting_price": 58999,
+   "gst_percent": 18,
+   "timeline_days": "40-60",
+   "deliverables": [],
+   "documents_required": [
+    "KYC of at least 2 members (Pan, Adhaar, Photo, Bank statements, Mobile No., Email ID)",
+    "DIN if available",
+    "Two Company Names (Unique and meaningful)",
+    "Shareholding ratios of Shareholders",
+    "Authorized and Paid-up Capital",
+    "Rent Agreement with An Electricity bill or any address proof for the office address"
+   ],
+   "packages": [
+    {
+     "name": "Basic",
+     "price": 58999,
+     "popular": false
+    },
+    {
+     "name": "Smart USP",
+     "price": 99499,
+     "popular": true
+    },
+    {
+     "name": "Don't Worry",
+     "price": 148999,
+     "popular": false
+    },
+    {
+     "name": "Master",
+     "price": 188999,
+     "popular": false
+    }
+   ]
+  },
+  {
+   "name": "e-ANUDAAN",
+   "category": "Registration & License",
+   "starting_price": 2000,
+   "gst_percent": 18,
+   "timeline_days": "7-10",
+   "deliverables": [],
+   "documents_required": [
+    "Authrorized person KYC (PAN, Aadhar, Mobile Number, and Email ID)",
+    "NGO's all Documents (Certificate, PAN, MOA/By-laws, AOA, and etc.)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Finmitra Regular Software",
+   "category": "IT Department",
+   "starting_price": 40000,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [],
+   "documents_required": [
+    "Company's Authorized person's KYC",
+    "Brand Name & Logo",
+    "Domain Name and login credentials (If available)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "demo service",
+   "category": "Tax & Compliance Department",
+   "starting_price": 1,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "CIBIL Checking Portal",
+   "category": "IT Department",
+   "starting_price": 5000,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Authorized Person's KYC (Pan, Adhaar, Mobile No., Email ID)",
+    "Logo (If available)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Section 8 Microfinance Compliance",
+   "category": "Tax & Compliance Department",
+   "starting_price": 25000,
+   "gst_percent": 18,
+   "timeline_days": "7-10",
+   "deliverables": [],
+   "documents_required": [
+    "Bank statement of company's current account from 1st April to 31st March",
+    "All types of Loan list",
+    "List of purchase during the year  (Details wise seprately)",
+    "List of Expenses paid with amount like salary, advertisement, electricity bill etc.",
+    "List of all Assets with amount, like computer, Furniture, Mobile, Automobiles etc.",
+    "GST login credentials (if Available)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Section 8 (NGO) Compliance",
+   "category": "Tax & Compliance Department",
+   "starting_price": 14999,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [],
+   "documents_required": [
+    "Bank statement of company's current account from 1st April to 31st March",
+    "List of donation received  during the year",
+    "List of purchase during the year  (Details wise seprately)",
+    "List of Expenses paid with amount like salary, advertisement, electricity bill etc.",
+    "List of all Assets with amount, like computer, Furniture, Mobile, Automobiles etc."
+   ],
+   "packages": []
+  },
+  {
+   "name": "NGO Website up to 5 pages (standard)",
+   "category": "IT Department",
+   "starting_price": 10000,
+   "gst_percent": 18,
+   "timeline_days": "7-10",
+   "deliverables": [],
+   "documents_required": [
+    "Scope/Matter",
+    "Domain Name (if available)",
+    "Logo (if available)",
+    "Sample project"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Farmer Producer Company(FPC) Registration",
+   "category": "Registration & License",
+   "starting_price": 35130,
+   "gst_percent": 18,
+   "timeline_days": "20-25",
+   "deliverables": [],
+   "documents_required": [
+    "KYC of at least 10 members (Pan, Adhaar, Photo, Bank statements, Mobile No., Email ID)",
+    "DIN if available",
+    "Two Company Names (Unique and meaningful)",
+    "Shareholding ratios of shareholders persons",
+    "Authorized and Paid-up Capital",
+    "Rent Agreement with An Electricity bill or any address proof for the office address.",
+    "Farmer Certificates"
+   ],
+   "packages": [
+    {
+     "name": "Basic",
+     "price": 29999,
+     "popular": false
+    },
+    {
+     "name": "Smart USP",
+     "price": 39999,
+     "popular": true
+    },
+    {
+     "name": "Don't Worry",
+     "price": 52999,
+     "popular": false
+    },
+    {
+     "name": "Master",
+     "price": 64999,
+     "popular": false
+    }
+   ]
+  },
+  {
+   "name": "Loan Agreement Bundle",
+   "category": "Registration & License",
+   "starting_price": 20000,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Company's Documents and details",
+    "Brand Name & Logo (if available)",
+    "Terms & Conditions (if demanded)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Board Approved Policy Pack",
+   "category": "Registration & License",
+   "starting_price": 5000,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Company's Documents & Details",
+    "Company's Authorized person's KYC",
+    "Brand Name & Logo (If required)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Microfinance Training Videos",
+   "category": "IT Department",
+   "starting_price": 20000,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Director Replacement Service",
+   "category": "Registration & License",
+   "starting_price": 5500,
+   "gst_percent": 18,
+   "timeline_days": "5-7",
+   "deliverables": [],
+   "documents_required": [
+    "Both Person KYC (PAN, Aadhar, Mobile Number, Email ID, Photo)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Nidhi Company Strike Off",
+   "category": "Registration & License",
+   "starting_price": 32000,
+   "gst_percent": 18,
+   "timeline_days": "90-150",
+   "deliverables": [],
+   "documents_required": [
+    "Copy of the latest ITR acknowledgment",
+    "Bank Account Closure Certificate",
+    "Updated MOA & AOA",
+    "Affidavits and Indemnity Bonds from Directors",
+    "Activated DINs of all directors",
+    "Final Financial Statement (Balance Sheets & Audit Reports)",
+    "All NOCs from members in case of deposits/loans (if applicable)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Director Addition",
+   "category": "Registration & License",
+   "starting_price": 4500,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Director KYC (PAN, Aadhar, Mobile Number, Email ID, Photo)",
+    "DIN Number (If Available)",
+    "DSC (If Available)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Director Removal",
+   "category": "Registration & License",
+   "starting_price": 4000,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Director KYC (PAN, Aadhar, Mobile Number, Email Id, Photo)",
+    "Signed Resignation Letter"
+   ],
+   "packages": []
+  },
+  {
+   "name": "LLP Annual Compliance",
+   "category": "Tax & Compliance Department",
+   "starting_price": 18000,
+   "gst_percent": 18,
+   "timeline_days": "7-15",
+   "deliverables": [],
+   "documents_required": [
+    "Bank statement of LLP's current account from 1st April to 31st March",
+    "List of sales during the year",
+    "List of purchase during the year",
+    "List of Expenses paid with amount, like salary, advertisement, electricity bill etc",
+    "List of all Assets with amount like Computer, Furniture, Mobile, Automobiles etc",
+    "GST login credentials (if available)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Logo Designing (2D)",
+   "category": "Intellectual Property",
+   "starting_price": 499,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Brand Name",
+    "Nature of Business",
+    "Goods & Service Description",
+    "Logo References (If Availabe)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Logo Designing (3D)",
+   "category": "Intellectual Property",
+   "starting_price": 1499,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Brand Name",
+    "Nature of Business",
+    "Goods & Service Description",
+    "Logo References (If Availabe)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "E-Stamp Paper",
+   "category": "Intellectual Property",
+   "starting_price": 500,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Identity Proof: PAN card, Aadhaar card, or Passport of the buyer/first party and seller/second party",
+    "Mobile Number and Email ID",
+    "Purpose: Description or article type (e.g., Affidavit, Rent Agreement, Sale Deed, Power of Attorney)."
+   ],
+   "packages": []
+  },
+  {
+   "name": "E-Stamp Paper",
+   "category": "Intellectual Property",
+   "starting_price": 1000,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Identity Proof: PAN card, Aadhaar card, or Passport of the buyer/first party and seller/second party",
+    "Mobile Number and Email ID",
+    "Purpose: Description or article type (e.g., Affidavit, Rent Agreement, Sale Deed, Power of Attorney)."
+   ],
+   "packages": []
+  },
+  {
+   "name": "E-Stamp Paper",
+   "category": "Intellectual Property",
+   "starting_price": 2000,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Identity Proof: PAN card, Aadhaar card, or Passport of the buyer/first party and seller/second party",
+    "Mobile Number and Email ID",
+    "Purpose: Description or article type (e.g., Affidavit, Rent Agreement, Sale Deed, Power of Attorney)."
+   ],
+   "packages": []
+  },
+  {
+   "name": "E-Stamp Paper",
+   "category": "Intellectual Property",
+   "starting_price": 2500,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Identity Proof: PAN card, Aadhaar card, or Passport of the buyer/first party and seller/second party",
+    "Mobile Number and Email ID",
+    "Purpose: Description or article type (e.g., Affidavit, Rent Agreement, Sale Deed, Power of Attorney)."
+   ],
+   "packages": []
+  },
+  {
+   "name": "Director Addition (Incorporation)",
+   "category": "Registration & License",
+   "starting_price": 3000,
+   "gst_percent": 18,
+   "timeline_days": "0-0",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Expedite Trademark Application",
+   "category": "Intellectual Property",
+   "starting_price": 21999,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Trademark Application Number",
+    "Power of Attoreny ( TM 48 )"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Trademark Hearing",
+   "category": "Intellectual Property",
+   "starting_price": 4899,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Trademark Application Number",
+    "Power of Attoreny ( TM 48 )",
+    "Documents Related to Usage of Brand",
+    "Appearances of Trademark Hearing"
+   ],
+   "packages": []
+  },
+  {
+   "name": "TM-M",
+   "category": "Intellectual Property",
+   "starting_price": 1999,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Trademark Transfer",
+   "category": "Intellectual Property",
+   "starting_price": 13999,
+   "gst_percent": 18,
+   "timeline_days": "5-7",
+   "deliverables": [],
+   "documents_required": [
+    "Current Owner (Transferor):  - PAN & Aadhaar - Trademark Certificate/Application - Signed Assignment Agreement - Company Documents (if applicable)",
+    "New Owner (Transferee):  - PAN & Aadhaar - Address Proof - Company Documents (if applicable) - Signed Assignment Agreement"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Legal Reply to Examination Report",
+   "category": "Intellectual Property",
+   "starting_price": 2499,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Trademark Application Number",
+    "Power of Attoreny ( TM 48 )"
+   ],
+   "packages": []
+  },
+  {
+   "name": "ROC Change Service",
+   "category": "Registration & License",
+   "starting_price": 96400,
+   "gst_percent": 18,
+   "timeline_days": "120-180",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "One Person Company (OPC) Registration",
+   "category": "Registration & License",
+   "starting_price": 11999,
+   "gst_percent": 18,
+   "timeline_days": "10-15",
+   "deliverables": [],
+   "documents_required": [
+    "KYC of at least 2 members (Pan, Adhaar, Photo, Bank statements, Mobile No., Email ID) One Director & One Nominee",
+    "DIN if available",
+    "Two Company Names (Unique and meaningful)",
+    "Authorized and Paid-up Capital",
+    "Rent Agreement with An Electricity bill or any address proof for the office address"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Testing Service",
+   "category": "IT Department",
+   "starting_price": 12000,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Face Attendance Software (Payroll)",
+   "category": "IT Department",
+   "starting_price": 5000,
+   "gst_percent": 18,
+   "timeline_days": "5-7",
+   "deliverables": [],
+   "documents_required": [],
+   "packages": []
+  },
+  {
+   "name": "Growth Agreement Bundle",
+   "category": "Registration & License",
+   "starting_price": 10000,
+   "gst_percent": 18,
+   "timeline_days": "3-5",
+   "deliverables": [],
+   "documents_required": [
+    "Company's Docuements and Details",
+    "Brand Name & Logo (if available)",
+    "Terms & Conditions (If Required)"
+   ],
+   "packages": []
+  },
+  {
+   "name": "Section 8 Microfinance Company Takeover",
+   "category": "Registration & License",
+   "starting_price": 250000,
+   "gst_percent": 18,
+   "timeline_days": "5-10",
+   "deliverables": [],
+   "documents_required": [
+    "KYC of at least 2 Person (PAN, Aadhar Card, Photo, Mobile Number, Email ID, and Bank Statement)",
+    "DIN if available",
+    "Electricity Bill or Any Address Proof for Office Address",
+    "Share Holding Ratios of Both Person",
+    "Other Documents and Details if Demanded"
+   ],
+   "packages": []
+  }
+ ],
+ "combos": [
+  {
+   "name": "NGO Funding Documents",
+   "price": 11999,
+   "includes": [
+    "Udyam (MSME) Registration",
+    "12A Registration",
+    "80G Registration",
+    "CSR-1 Registration",
+    "DARPAN Registration",
+    "ISO 9001 – Quality Management System",
+    "e-ANUDAAN"
+   ]
+  }
+ ]
+}

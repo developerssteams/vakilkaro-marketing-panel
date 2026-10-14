@@ -1,0 +1,53 @@
+VAKILKARO MARKETING PANEL — v21  (Marketing + WhatsApp bot, EK hi app)
+=====================================================================
+
+Aapke bheje whatsapp-ai (v5) ka saara kaam ab isi panel me hai:
+  - WhatsApp AI bot (wahi services / price list)          → /api/whatsapp/webhook
+  - Saari chats + leads (wahi purana database)            → Sidebar: WhatsApp Chats
+  - Client ka number jodna (Embedded Signup)              → /connect  (public link)
+  - Client ke number pe bhi bot jawab deta hai (clients table)
+  - WhatsApp ad leads → Lead Capture + Campaigns ka WhatsApp card
+
+Purane app ki .env.local ki values pehle se is folder ki ".env" file me daal di hain
+(WA_DATABASE_URL, WA_TOKEN, WA_VERIFY_TOKEN, OPENAI_API_KEY, OPENAI_MODEL, APP_SECRET,
+META_TOKEN, META_AD_ACCOUNTS). Kuch copy nahi karna.
+
+PRIVATE: ".env" me WhatsApp token, OpenAI key, database password aur Page tokens hain.
+Ye zip/folder kisi ko forward mat karna, GitHub pe mat daalna.
+
+-------------------------------------------------------------
+A) ABHI — APNE COMPUTER PE (local)
+-------------------------------------------------------------
+WhatsApp ka database server pe hai. Computer se use dekhne ke liye 2 terminal:
+
+ Terminal 1:   npm run wa-tunnel
+               - Pehli baar server ka SSH login poochega
+                 (default: root@whatsapp-ai.vakilkaro.com — Enter dabao,
+                  ya apna user@SERVER-IP likho). Phir server ka SSH password.
+               - Screen khaali rahegi — ye normal hai. Window KHULI rakho.
+
+ Terminal 2:   npm run dev
+               → Sidebar → WhatsApp Chats → Refresh. Saari chats aa jaayengi.
+
+ .env.local me kuch nahi likhna — tunnel ka address (WA_DATABASE_URL_DEV) ".env" me pehle se hai.
+ Local pe Meta ka webhook MAT badalna — bot tab tak purane whatsapp-ai app pe chalta rahe.
+
+-------------------------------------------------------------
+B) SERVER PE (jab live karna ho)
+-------------------------------------------------------------
+ 1. Is folder ki files server ke panel folder me UPAR SE copy karo
+    (purana folder delete mat karna — .env.local usi me hai).
+ 2. Server ki .env.local me WA_DATABASE_URL 5433 wala ho to HATA do
+    (server pe ".env" wala localhost:5432 seedha chalega).
+ 3. npm run build  →  restart
+ 4. Meta webhook badlo:
+      developers.facebook.com → App (1752005389283386) → WhatsApp → Configuration → Webhook → Edit
+        Callback URL : https://<PANEL-KA-DOMAIN>/api/whatsapp/webhook
+        Verify token : wahi purana (".env" me WA_VERIFY_TOKEN)
+      → Verify and save
+ 5. Embedded Signup use karte ho to Meta App → Facebook Login for Business → Settings →
+    "Allowed domains" / "Valid OAuth redirect URIs" me panel ka domain add karo.
+    Client ko link do: https://<PANEL-KA-DOMAIN>/connect
+ 6. Apne WhatsApp number pe message bhejo → bot jawab dega → WhatsApp Chats me dikhega.
+ 7. Sab chal jaaye to purana whatsapp-ai.vakilkaro.com band kar sakte ho.
+    (Step 4 se pehle band MAT karna.)

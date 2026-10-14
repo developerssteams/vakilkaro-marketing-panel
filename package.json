@@ -1,0 +1,18 @@
+{
+  "name": "vakilkaro-marketing-panel",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "mysql2": "^3.23.3",
+    "next": "latest",
+    "pg": "^8.13.1",
+    "react": "latest",
+    "react-dom": "latest"
+  }
+}
