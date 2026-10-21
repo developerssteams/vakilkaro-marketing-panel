@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RANGES } from "../lib/date-range";
 import { OBJECTIVES } from "../lib/objectives";
-import { DEFAULT_FILTERS, FILTER_PLATFORMS, FILTER_STATUSES, activeCount, filterSummary, normalizeFilters } from "../lib/filters";
+import { DEFAULT_FILTERS, FILTER_PLATFORMS, FILTER_STATUSES, activeCount, filterSummary, normalizeFilters, timeWindow, filterRangeLabel } from "../lib/filters";
 
 export { DEFAULT_FILTERS };
 
@@ -36,10 +36,18 @@ export default function FilterPanel({ value, onApply }) {
 
   function set(patch) { setDraft((p) => ({ ...p, ...patch })); }
 
+  /* Custom me time bhara ho to check — "From" "To" se pehle hona chahiye */
+  const nd = normalizeFilters(draft);
+  const win = timeWindow(nd);
+  const badTime = Boolean(win && win.fromMs >= win.toMs);
+
   function apply() {
-    onApply(normalizeFilters(draft));
+    if (badTime) return;
+    onApply(nd);
     setOpen(false);
   }
+
+  const todayStr = (() => { const x = new Date(); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; })();
 
   function clearAll() {
     setDraft(DEFAULT_FILTERS);
@@ -76,10 +84,29 @@ export default function FilterPanel({ value, onApply }) {
                 ))}
               </div>
               {draft.range === "custom" ? (
-                <div className="fp-dates">
-                  <label><span>From</span><input type="date" className="form-control" value={draft.from || ""} max={draft.to || undefined} onChange={(e) => set({ from: e.target.value })} /></label>
-                  <label><span>To</span><input type="date" className="form-control" value={draft.to || ""} min={draft.from || undefined} onChange={(e) => set({ to: e.target.value })} /></label>
-                </div>
+                <>
+                  <div className="fp-dates" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                    <label><span>From date</span><input type="date" className="form-control" value={draft.from || ""} max={draft.to || todayStr} onChange={(e) => set({ from: e.target.value })} /></label>
+                    <label><span>From time</span><input type="time" className="form-control" value={draft.fromTime || ""} onChange={(e) => set({ fromTime: e.target.value })} /></label>
+                    <label><span>To date</span><input type="date" className="form-control" value={draft.to || ""} min={draft.from || undefined} max={todayStr} onChange={(e) => set({ to: e.target.value })} /></label>
+                    <label><span>To time</span><input type="time" className="form-control" value={draft.toTime || ""} onChange={(e) => set({ toTime: e.target.value })} /></label>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                    <button type="button" className={`fp-opt${draft.to === todayStr && !draft.toTime ? " on" : ""}`} onClick={() => set({ to: todayStr, toTime: "" })}>
+                      {draft.to === todayStr && !draft.toTime ? <i className="fa-solid fa-check" /> : null}To: till now
+                    </button>
+                    {draft.fromTime || draft.toTime ? (
+                      <button type="button" className="fp-opt" onClick={() => set({ fromTime: "", toTime: "" })}><i className="fa-solid fa-xmark" /> Clear time</button>
+                    ) : null}
+                  </div>
+                  <div style={{ fontSize: 11, color: badTime ? "#B42318" : "var(--muted)", marginTop: 8, lineHeight: 1.45 }}>
+                    {badTime
+                      ? <><i className="fa-solid fa-triangle-exclamation" /> &quot;From&quot; has to be before &quot;To&quot;.</>
+                      : win
+                        ? <><i className="fa-regular fa-clock" /> {filterRangeLabel(nd)} · Meta gives data hour by hour, so the hour you pick is counted in full.</>
+                        : <>Leave time empty for whole days. Leave &quot;To time&quot; empty to count till the end of that day (till now, if it is today).</>}
+                  </div>
+                </>
               ) : null}
             </div>
 
@@ -128,7 +155,7 @@ export default function FilterPanel({ value, onApply }) {
 
           <div className="fp-foot">
             <button type="button" className="btn btn-ghost" onClick={clearAll}><i className="fa-solid fa-rotate-left" /> Clear</button>
-            <button type="button" className="btn btn-gold" onClick={apply}><i className="fa-solid fa-check" /> Apply</button>
+            <button type="button" className="btn btn-gold" onClick={apply} disabled={badTime}><i className="fa-solid fa-check" /> Apply</button>
           </div>
         </div>
       ) : null}

@@ -28,7 +28,7 @@ import CampaignAds from "./CampaignAds";
 import DailyChart from "./DailyChart";
 import { accountProblems } from "../lib/sync-merge";
 import { sumMetrics, sameCampaign, costPerResult, ctrAll, ctrLink, cpm, budgetInfo } from "../lib/meta-metrics";
-import { DEFAULT_FILTERS, applyStatus } from "../lib/filters";
+import { DEFAULT_FILTERS, applyStatus, timeWindow, filterRangeLabel } from "../lib/filters";
 import {
   num, money, money2, count, pretty, isPillKey, statusClass, blankForm,
   labelOf, dayLabel, FormModal, Empty,
@@ -77,6 +77,61 @@ export default function CampaignCards({ moduleKey, tab, show }) {
   }, [ds]);
 
   const { from, to } = useMemo(() => resolveRange(flt.range, flt.from, flt.to), [flt]);
+  const rl = filterRangeLabel(flt, from, to);
+
+  /* TIME FILTER — Custom me time bhara ho (jaise kal 06:00 → aaj abhi)
+     to Meta ka data ghante-wise seedha Meta se aata hai. Manual /
+     YouTube / Website ki entries din-wise hi rehti hain. */
+  const win = useMemo(() => timeWindow(flt), [flt]);
+  const winKey = win ? `${win.fromMs}|${flt.to}|${flt.toTime}` : "";
+  const [hourly, setHourly] = useState({ key: "", rows: [], loading: false, error: "", estimated: false, at: "" });
+  const [hourlyTick, setHourlyTick] = useState(0);
+  useEffect(() => {
+    if (!win) return undefined;
+    const ids = [...new Set(accounts.filter((a) => a.platform === "Meta").map((a) => String(a.accountId || "").trim()).filter((x) => /^act_\d+$/.test(x)))];
+    if (!ids.length) { setHourly({ key: winKey, rows: [], loading: false, error: "Connect a Meta account in Ad Accounts first.", estimated: false, at: "" }); return undefined; }
+    let alive = true;
+    setHourly((h) => ({ ...h, key: winKey, loading: true, error: "" }));
+    fetch("/api/meta/hourly", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountIds: ids, fromMs: win.fromMs, toMs: win.tillNow ? Date.now() : win.toMs }),
+    })
+      .then((r) => r.json().then((j) => ({ ok: r.ok, j })).catch(() => ({ ok: false, j: {} })))
+      .then(({ ok, j }) => {
+        if (!alive) return;
+        const names = {}; accounts.forEach((a) => { names[String(a.accountId || "").trim()] = a.name; });
+        const errs = (j.errors || []).map((e) => `${names[e.account] || e.account}: ${e.message}`).join(" · ");
+        setHourly({ key: winKey, rows: ok ? (j.rows || []) : [], loading: false, error: ok ? errs : (j.error || "Could not load hour-wise data from Meta"), estimated: Boolean(j.estimated), at: j.at || "" });
+      })
+      .catch(() => { if (alive) setHourly({ key: winKey, rows: [], loading: false, error: "Could not reach the server", estimated: false, at: "" }); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [winKey, hourlyTick, accounts.length]);
+
+  /* Time filter ki patti — filter ke neeche: kaunsa waqt, load ho raha
+     hai ya nahi, Refresh, aur FB/IG andaaza wali baat */
+  const timeBar = win ? (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 12px", margin: "-4px 0 14px", padding: "9px 13px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg2)", fontSize: 12 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontWeight: 700 }}>
+        <i className="fa-regular fa-clock" style={{ color: "#B7791F" }} /> {rl}
+      </span>
+      <span style={{ color: "var(--muted)" }}>
+        {hourly.loading ? <><i className="fa-solid fa-spinner fa-spin" /> Loading hour-wise data from Meta...</>
+          : hourly.at ? `Hour-wise from Meta · updated ${new Date(hourly.at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}` : "Hour-wise from Meta"}
+      </span>
+      {hourly.estimated && !hourly.loading ? <span style={{ color: "var(--muted)" }}>· Facebook / Instagram split is estimated (Meta gives hourly data only as one total)</span> : null}
+      <button type="button" className="btn btn-ghost" style={{ marginLeft: "auto", padding: "5px 11px", fontSize: 12 }} disabled={hourly.loading} onClick={() => setHourlyTick((t) => t + 1)}>
+        <i className={`fa-solid fa-rotate${hourly.loading ? " fa-spin" : ""}`} /> Refresh
+      </button>
+      {hourly.error ? <span style={{ flexBasis: "100%", color: "#B42318" }}><i className="fa-solid fa-triangle-exclamation" /> {hourly.error}</span> : null}
+    </div>
+  ) : null;
+
+  /* Time filter chalu ho to Meta ki din-wali rows ki jagah ghante-wali */
+  const sourceDaily = useMemo(
+    () => (win ? [...daily.filter((d) => d.source !== "Meta Sync"), ...(hourly.key === winKey ? hourly.rows : [])] : daily),
+    [win, daily, hourly, winKey],
+  );
   useEffect(() => { setAdPage(1); }, [openCard, search, flt, acct]);
 
   /* Platform filter — "kaunsi Facebook / Instagram / YouTube / Website
@@ -125,7 +180,7 @@ export default function CampaignCards({ moduleKey, tab, show }) {
   }, [statusRows, flt.status, flt.objective]);
 
   const dailyInRange = useMemo(
-    () => daily.filter((d) => {
+    () => sourceDaily.filter((d) => {
       if (!inRange(d.date, from, to)) return false;
       if (!statusKeys) return true;
       const hit = d.extId ? statusKeys.has(`id:${d.extId}`) : statusKeys.has(`nm:${String(d.campaign || "").toLowerCase()}|${d.account || ""}`);
@@ -135,7 +190,7 @@ export default function CampaignCards({ moduleKey, tab, show }) {
       const known = d.extId ? knownKeys.has(`id:${d.extId}`) : knownKeys.has(`nm:${String(d.campaign || "").toLowerCase()}|${d.account || ""}`);
       return !known && !flt.status && Boolean(flt.objective) && objectiveFromResult(d.resultLabel) === flt.objective;
     }),
-    [daily, from, to, statusKeys, knownKeys, flt.status, flt.objective],
+    [sourceDaily, from, to, statusKeys, knownKeys, flt.status, flt.objective],
   );
 
   /* Daily data hai hi nahi to campaign ka total dikhao, warna screen
@@ -364,11 +419,11 @@ export default function CampaignCards({ moduleKey, tab, show }) {
       <>
       {adsDrawer}
       <MetaSplitView
-        rows={metaRows} dailyInRange={dailyInRange} range={flt.range} from={from} to={to}
+        rows={metaRows} dailyInRange={dailyInRange} range={flt.range} from={from} to={to} rangeText={rl}
         problems={problems} busyId={busyId}
         onBack={() => { setOpenCard(null); setSearch(""); }}
         onOpenCard={openView} onToggle={toggleOnOff} onAds={setAdsFor}
-        filterPanel={<div className="sq-row"><FilterPanel value={flt} onApply={(f) => setFlt({ ...f, platform: "" })} /><StatusQuick value={flt.status} onChange={(st) => setFlt((p) => ({ ...p, status: st }))} /><ObjectiveQuick value={flt.objective} rows={rows} onChange={(o) => setFlt((p) => ({ ...p, objective: o }))} /></div>}
+        filterPanel={<><div className="sq-row"><FilterPanel value={flt} onApply={(f) => setFlt({ ...f, platform: "" })} /><StatusQuick value={flt.status} onChange={(st) => setFlt((p) => ({ ...p, status: st }))} /><ObjectiveQuick value={flt.objective} rows={rows} onChange={(o) => setFlt((p) => ({ ...p, objective: o }))} /></div>{timeBar}</>}
       />
       </>
     );
@@ -442,10 +497,11 @@ export default function CampaignCards({ moduleKey, tab, show }) {
           <FilterPanel value={flt} onApply={(f) => { setFlt(f); if (f.platform !== plat) { setOpenCard(f.platform || null); setSearch(""); } }} />
           <StatusQuick value={flt.status} onChange={(st) => setFlt((p) => ({ ...p, status: st }))} /><ObjectiveQuick value={flt.objective} rows={rows} onChange={(o) => setFlt((p) => ({ ...p, objective: o }))} />
         </div>
+        {timeBar}
         {card.via === "Meta" ? <ProblemBanner problems={problems} /> : null}
 
         <div className="cc-stats">
-          <StatBox label={isMeta ? "Amount spent" : "Spend"} value={M(d.spend)} sub={hasDaily ? `${d.entries} daily entr${d.entries === 1 ? "y" : "ies"}` : "campaign totals"} icon="fa-indian-rupee-sign" />
+          <StatBox label={isMeta ? "Amount spent" : "Spend"} value={M(d.spend)} sub={win ? "hour-wise from Meta" : hasDaily ? `${d.entries} daily entr${d.entries === 1 ? "y" : "ies"}` : "campaign totals"} icon="fa-indian-rupee-sign" />
           <StatBox label={isMeta ? "Results" : "Leads"} value={count(d.leads)}
             sub={d.leads > 0 ? `${isMeta ? "Cost per result" : "CPL"} ${M(d.spend / d.leads)}` : "0 in this range"} icon="fa-inbox" />
           <StatBox label="Live" value={count(d.live)} sub={d.blocked ? `${d.blocked} stopped by payment error` : "running now"} icon="fa-circle-play" tone="green" />
@@ -510,8 +566,8 @@ export default function CampaignCards({ moduleKey, tab, show }) {
                     <tr>
                       <th className="ac-name">Campaign</th>
                       <th>Budget</th>
-                      <th className="ta-r">{isMeta ? "Amount spent" : "Spend"} <span className="th-sub">{rangeLabel(rf.range, from, to)}</span></th>
-                      <th className="ta-r">{isMeta ? "Results" : "Leads"} <span className="th-sub">{rangeLabel(rf.range, from, to)}</span></th>
+                      <th className="ta-r">{isMeta ? "Amount spent" : "Spend"} <span className="th-sub">{rl}</span></th>
+                      <th className="ta-r">{isMeta ? "Results" : "Leads"} <span className="th-sub">{rl}</span></th>
                       <th className="ta-r">{isMeta ? "Cost / result" : "CPL"}</th>
                       {isMeta ? <th className="ta-r ac-del">Delivery <span className="th-sub">Impr. · clicks</span></th> : null}
                       <th className="ac-stc">Status</th><th className="ta-r ac-act"><span className="sr-only">Actions</span></th>
@@ -636,6 +692,7 @@ export default function CampaignCards({ moduleKey, tab, show }) {
         <FilterPanel value={flt} onApply={setFlt} />
         <StatusQuick value={flt.status} onChange={(st) => setFlt((p) => ({ ...p, status: st }))} /><ObjectiveQuick value={flt.objective} rows={rows} onChange={(o) => setFlt((p) => ({ ...p, objective: o }))} />
       </div>
+      {timeBar}
 
       {plat ? (() => {
         const d = byCard[plat];
@@ -648,7 +705,7 @@ export default function CampaignCards({ moduleKey, tab, show }) {
             <span className="pf-sep">·</span><span><b>{d.paused}</b> paused</span>
             <span className="pf-sep">·</span><span><b>{money(d.spend)}</b> spend</span>
             <span className="pf-sep">·</span><span><b>{count(d.leads)}</b> leads</span>
-            <span className="pf-rng">{rangeLabel(rf.range, from, to)}</span>
+            <span className="pf-rng">{rl}</span>
             <button type="button" className="pf-clear" onClick={() => setPlat("")}>
               <i className="fa-solid fa-xmark" /> Show all
             </button>
@@ -673,7 +730,7 @@ export default function CampaignCards({ moduleKey, tab, show }) {
           <section className="mx">
             <div className="mx-top">
               <span className="mt-badge"><i className="fa-brands fa-meta" /> Meta</span>
-              <span className="mt-period">{rangeLabel(rf.range, from, to)}</span>
+              <span className="mt-period">{rl}</span>
               <button type="button" className="mx-link" onClick={() => openView("Meta")}>Compare Facebook and Instagram <i className="fa-solid fa-arrow-right" /></button>
             </div>
             <div className="mx-body">
@@ -738,7 +795,7 @@ export default function CampaignCards({ moduleKey, tab, show }) {
               </div>
               <div className="lg-desc">{c.note}</div>
               <div className="lg-amt">{money(d.spend)}</div>
-              <div className="lg-amt-sub">Spent, {rangeLabel(rf.range, from, to).toLowerCase()}</div>
+              <div className="lg-amt-sub">Spent, {win ? rl : rl.toLowerCase()}</div>
               <Spark points={trend} color={c.accent} />
               <div className="lg-pair">
                 <div><b>{count(d.leads)}</b><span>{isMeta ? "results" : "leads"}</span></div>

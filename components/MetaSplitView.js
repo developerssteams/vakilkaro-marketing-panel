@@ -32,7 +32,7 @@ const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
 const M = money2;
 
 export default function MetaSplitView({
-  rows, dailyInRange, range, from, to, problems, busyId,
+  rows, dailyInRange, range, from, to, problems, busyId, rangeText,
   onBack, onOpenCard, onToggle, onAds, filterPanel,
 }) {
   const [search, setSearch] = useState("");
@@ -86,7 +86,7 @@ export default function MetaSplitView({
 
   const live = rows.filter((r) => r.status === "Active" && !blockedIds.has(r.accountId)).length;
   const { fb, ig, all } = totals;
-  const rl = rangeLabel(range, from, to);
+  const rl = rangeText || rangeLabel(range, from, to);
 
   /* FB vs IG: kaunsa sasta — CPL kam = behtar */
   const cheaper = fb.leads && ig.leads ? (cpl(fb) <= cpl(ig) ? FB : IG) : "";
