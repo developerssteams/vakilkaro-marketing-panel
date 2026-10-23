@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useToast } from "./Toast";
 import AutoSync from "./AutoSync";
+import SharedSync from "./SharedSync";
 
 /* ============================================================
    MARKETING PANEL — SIDEBAR MODULE CATALOGUE
@@ -274,6 +275,7 @@ export default function DashboardShell({ user, perms = {}, children, active, pag
 
             <div className="tb-spacer" />
 
+            <SharedSync />
             <AutoSync />
 
             <div className="tb-search tablet-search">

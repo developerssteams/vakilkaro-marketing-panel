@@ -18,6 +18,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { autoPullExtras } from "../lib/meta-pull";
+import { sharedReady } from "../lib/shared-store";
 import { autoSyncNow, readSyncState, readAutoPref, saveAutoPref, isStale, INTERVALS, accountProblems, backoffLeft } from "../lib/sync-merge";
 
 function ago(iso) {
@@ -63,6 +64,9 @@ export default function AutoSync() {
     if (busyRef.current) return;
     busyRef.current = true; setBusy(true);
     try {
+      /* Pehle shared database ka data aa jaaye — warna naya browser
+         poora 90 din dobara Meta se maangta aur duplicate banata */
+      await sharedReady();
       const r = await autoSyncNow({ force });
       /* campaigns ke baad leads (har 15 min) aur payments (din me ek baar) */
       if (!r.skipped) await autoPullExtras().catch(() => {});
