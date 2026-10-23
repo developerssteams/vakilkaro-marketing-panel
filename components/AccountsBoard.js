@@ -11,7 +11,8 @@
    se aate hain) — sirf dikhne ka tareeka badla hai.
    ============================================================ */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { dedupeAccounts } from "../lib/sync-merge";
 import { money, count } from "./ModuleParts";
 import { tokenState } from "../lib/marketing-validate";
 
@@ -32,6 +33,8 @@ function ago(iso) {
 }
 
 export default function AccountsBoard({ rows, onEdit, onDelete, onConnect, onAdd }) {
+  /* Same account do-teen baar dikhe to ek kar do (lib/sync-merge) */
+  useEffect(() => { dedupeAccounts(); }, [rows.length]);
   const [q, setQ] = useState("");
   const [copied, setCopied] = useState("");
 

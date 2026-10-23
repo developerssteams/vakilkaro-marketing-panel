@@ -108,7 +108,8 @@ export default function MetaConnect({ onClose, onDone }) {
           const keep = next[i];
           next[i] = { ...keep, ...patch, name: keep.name || patch.name, pageId: keep.pageId || patch.pageId, pageName: keep.pageName || patch.pageName };
         } else {
-          next.unshift({ id: uid(), isDefault: firstDefault ? "Yes" : "No", monthlyLimit: "", owner: "", createdAt: now, ...patch });
+          /* Pakki id — doosre computer se connect karne pe bhi ek hi row */
+          next.unshift({ id: `acc-meta-${a.accountId}`, isDefault: firstDefault ? "Yes" : "No", monthlyLimit: "", owner: "", createdAt: now, ...patch });
           firstDefault = false;
         }
       });
