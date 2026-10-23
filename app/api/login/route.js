@@ -19,6 +19,10 @@ function clientIp(request) {
   return request.headers.get("x-real-ip") || "";
 }
 
+/* Database ki chhoti cheezein (attempts gin-na, login history) fail hon
+   to bhi login na ruke — pehle yahan crash hoke "Unable to sign in" aata tha */
+async function quiet(p) { try { return await p; } catch { return undefined; } }
+
 export async function POST(request) {
   let body;
   try {
@@ -55,9 +59,9 @@ export async function POST(request) {
   }
 
   // brute-force guard: 5 tries / 10 min per login input
-  const allowed = await rateAllow(login.toLowerCase(), 5, 600);
-  if (!allowed) {
-    await logAudit("login_blocked", { loginInput: login, ip, userAgent, device });
+  const allowed = await quiet(rateAllow(login.toLowerCase(), 5, 600));
+  if (allowed === false) {
+    await quiet(logAudit("login_blocked", { loginInput: login, ip, userAgent, device }));
     return NextResponse.json(
       { message: "Too many attempts. Try again in a few minutes." },
       { status: 429 }
@@ -68,6 +72,13 @@ export async function POST(request) {
   try {
     user = await authenticate(login, password);
   } catch (e) {
+    /* Database me staff ki users table hi nahi (abhi sirf admin login) */
+    if (/relation .*users.* does not exist|ECONNREFUSED|ENOTFOUND|DATABASE_URL|connect/i.test(String(e?.message || e))) {
+      return NextResponse.json(
+        { message: "Invalid login or password. Staff logins are not set up yet — use the admin login." },
+        { status: 401 }
+      );
+    }
     return NextResponse.json(
       { message: "Sign in is temporarily unavailable." },
       { status: 500 }
@@ -75,19 +86,19 @@ export async function POST(request) {
   }
 
   if (!user) {
-    await logAudit("login_failed", { loginInput: login, ip, userAgent, device });
+    await quiet(logAudit("login_failed", { loginInput: login, ip, userAgent, device }));
     return NextResponse.json({ message: "Invalid login or password." }, { status: 401 });
   }
 
   // success
-  await rateClear(login.toLowerCase());
-  await createSession(user.id, {
+  await quiet(rateClear(login.toLowerCase()));
+  await quiet(createSession(user.id, {
     ip,
     userAgent,
     device,
     deviceLabel: device === "mobile" ? "Mobile" : device === "tablet" ? "Tablet" : "Desktop",
-  });
-  await logAudit("login_ok", { userId: user.id, loginInput: login, ip, userAgent, device });
+  }));
+  await quiet(logAudit("login_ok", { userId: user.id, loginInput: login, ip, userAgent, device }));
 
   const response = NextResponse.json({ ok: true, role: user.role_key });
   response.cookies.set({
