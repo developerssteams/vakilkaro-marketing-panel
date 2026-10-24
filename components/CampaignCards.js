@@ -96,12 +96,14 @@ export default function CampaignCards({ moduleKey, tab, show }) {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ accountIds: ids, fromMs: win.fromMs, toMs: win.tillNow ? Date.now() : win.toMs }),
     })
-      .then((r) => r.json().then((j) => ({ ok: r.ok, j })).catch(() => ({ ok: false, j: {} })))
-      .then(({ ok, j }) => {
+      .then((r) => r.json().then((j) => ({ ok: r.ok, j, status: r.status })).catch(() => ({ ok: false, j: {}, status: r.status })))
+      .then(({ ok, j, status }) => {
         if (!alive) return;
         const names = {}; accounts.forEach((a) => { names[String(a.accountId || "").trim()] = a.name; });
         const errs = (j.errors || []).map((e) => `${names[e.account] || e.account}: ${e.message}`).join(" · ");
-        setHourly({ key: winKey, rows: ok ? (j.rows || []) : [], loading: false, error: ok ? errs : (j.error || "Could not load hour-wise data from Meta"), estimated: Boolean(j.estimated), at: j.at || "" });
+        setHourly({ key: winKey, rows: ok ? (j.rows || []) : [], loading: false, error: ok ? errs : (j.error || (status === 404
+          ? "Hour-wise data route not found (HTTP 404) — app/api/meta/hourly/route.js is missing. Put the file there and restart the server."
+          : `Could not load hour-wise data from Meta (HTTP ${status}) — check the server terminal / Vercel logs for the error.`)), estimated: Boolean(j.estimated), at: j.at || "" });
       })
       .catch(() => { if (alive) setHourly({ key: winKey, rows: [], loading: false, error: "Could not reach the server", estimated: false, at: "" }); });
     return () => { alive = false; };
@@ -741,12 +743,37 @@ export default function CampaignCards({ moduleKey, tab, show }) {
                   <div><em>{count(ld)}</em><small>results</small></div>
                   <div><em>{ld ? money2(sp / ld) : "—"}</em><small>per result</small></div>
                 </div>
-                {(f.formLeads || 0) + (i.formLeads || 0) + (f.chats || 0) + (i.chats || 0) > 0 ? (
-                  <div className="mx-split" title="Lead Capture me sirf form leads aati hain — chats WhatsApp/Messenger me hoti hain">
-                    <span><i className="fa-solid fa-file-lines" /> <em>{count((f.formLeads || 0) + (i.formLeads || 0))}</em> form leads</span>
-                    <span><i className="fa-brands fa-whatsapp" /> <em>{count((f.chats || 0) + (i.chats || 0))}</em> chats</span>
-                  </div>
-                ) : null}
+                {(f.formLeads || 0) + (i.formLeads || 0) + (f.chats || 0) + (i.chats || 0) > 0 ? (() => {
+                  /* Form leads aur chats — sabse zaroori, isliye bade highlight tiles */
+                  const fl = (f.formLeads || 0) + (i.formLeads || 0);
+                  const ch = (f.chats || 0) + (i.chats || 0);
+                  const tile = (bg, bd) => ({ display: "flex", flexDirection: "column", gap: 6, padding: "12px 12px", borderRadius: 14, background: bg, border: `1px solid ${bd}`, minWidth: 0 });
+                  const ic = (bg, fg) => ({ width: 26, height: 26, borderRadius: 8, display: "grid", placeItems: "center", background: bg, color: fg, fontSize: 13, flexShrink: 0 });
+                  const big = { fontSize: 26, fontWeight: 800, lineHeight: 1, letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums", color: "#101828" };
+                  const lbl = { fontSize: 12.5, fontWeight: 700, color: "#1B2333", whiteSpace: "nowrap" };
+                  const sub = { fontSize: 10, fontWeight: 600, color: "#5B6478", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+                  return (
+                    <div title="Lead Capture me sirf form leads aati hain — chats WhatsApp/Messenger me hoti hain"
+                      style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14, paddingTop: 14, borderTop: "1px dashed #E3E6EF" }}>
+                      <div style={tile("linear-gradient(160deg,#EEF4FF,#F8FAFF)", "#D6E4FF")}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={ic("#2F6FED", "#fff")}><i className="fa-solid fa-file-lines" /></span>
+                          <span style={lbl}>Form leads</span>
+                        </div>
+                        <b style={big}>{count(fl)}</b>
+                        <span style={sub}><i className="fa-solid fa-inbox" /> Lead Capture</span>
+                      </div>
+                      <div style={tile("linear-gradient(160deg,#E9FBF0,#F6FEF9)", "#C6F0D6")}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={ic("#25D366", "#fff")}><i className="fa-brands fa-whatsapp" /></span>
+                          <span style={lbl}>Chats</span>
+                        </div>
+                        <b style={big}>{count(ch)}</b>
+                        <span style={sub}><i className="fa-solid fa-comments" /> WhatsApp / DM</span>
+                      </div>
+                    </div>
+                  );
+                })() : null}
               </div>
               <div className="mx-vs">
                 {[
