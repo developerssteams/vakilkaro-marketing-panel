@@ -787,12 +787,26 @@ export default function CampaignCards({ moduleKey, tab, show }) {
                   return (
                     <button type="button" key={x.k} className="mx-side" style={{ "--pc": x.c }} onClick={() => { setPlat(x.k); setOpenCard(x.k); }}>
                       <Ring pct={x.pct} color={x.c} />
-                      <div className="mx-side-body">
+                      <div className="mx-side-body" style={{ flex: 1, minWidth: 0 }}>
                         <div className="mx-side-h"><i className={x.icon} /> {x.k}{cheaper ? <span className="mx-tag">Cheaper per result</span> : null}</div>
                         <b>{money(x.t.spend)}</b>
                         <div className="mx-side-row">
                           <span><em>{count(x.t.leads)}</em> results</span>
                           <span><em>{cpr ? money2(cpr) : "—"}</em> per result</span>
+                        </div>
+                        {/* Is platform ki form leads, chats, impressions, clicks — khaali jagah bhi bharti hai */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(92px, 1fr))", gap: 8, marginTop: 12 }}>
+                          {[
+                            { ic: "fa-solid fa-file-lines", l: "Form leads", v: count(x.t.formLeads || 0) },
+                            { ic: "fa-brands fa-whatsapp", l: "Chats", v: count(x.t.chats || 0) },
+                            { ic: "fa-solid fa-eye", l: "Impressions", v: count(x.t.impressions || 0) },
+                            { ic: "fa-solid fa-arrow-pointer", l: "Link clicks", v: count(x.t.linkClicks || 0) },
+                          ].map((m) => (
+                            <span key={m.l} style={{ display: "flex", flexDirection: "column", gap: 3, padding: "8px 10px", borderRadius: 10, background: `color-mix(in srgb, ${x.c} 7%, #fff)`, border: `1px solid color-mix(in srgb, ${x.c} 18%, #fff)`, textAlign: "left", minWidth: 0 }}>
+                              <small style={{ fontSize: 10.5, fontWeight: 700, color: "#5B6478", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}><i className={m.ic} style={{ color: x.c, marginRight: 4 }} />{m.l}</small>
+                              <strong style={{ fontSize: 16, fontWeight: 800, color: "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{m.v}</strong>
+                            </span>
+                          ))}
                         </div>
                       </div>
                     </button>
