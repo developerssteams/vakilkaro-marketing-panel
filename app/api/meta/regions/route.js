@@ -3,7 +3,8 @@ import { currentUser } from "../../../../lib/session";
 import { metaConfig } from "../../../../lib/platform-config";
 import { fetchRegionInsights } from "../../../../lib/meta-api";
 
-/* POST { accountIds, since, until } → har campaign ka state-wise spend / leads */
+/* POST { accountIds, since, until, level? } → har campaign (level "adset" ho
+   to har ad set) ka state-wise spend / leads */
 export async function POST(request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -14,7 +15,7 @@ export async function POST(request) {
   const day = /^\d{4}-\d{2}-\d{2}$/;
   if (!day.test(String(d.since || "")) || !day.test(String(d.until || ""))) return NextResponse.json({ error: "Bad date range" }, { status: 400 });
   try {
-    const r = await fetchRegionInsights(ids, d.since, d.until);
+    const r = await fetchRegionInsights(ids, d.since, d.until, d.level === "adset" ? "adset" : "campaign");
     return NextResponse.json({ ok: true, ...r, since: d.since, until: d.until, at: new Date().toISOString() });
   } catch (e) {
     return NextResponse.json({ error: e?.message || "Could not load state-wise data" }, { status: 502 });

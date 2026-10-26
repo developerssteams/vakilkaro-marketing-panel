@@ -4,7 +4,7 @@
    components/StatesTab.js — Campaigns → "States"
 
    Kaunsi lead kis state se aa rahi hai — Meta ke region breakdown se.
-   Filter: period · campaign · state · sirf chal rahe campaigns.
+   Filter: period · campaign · ad set · state · sirf chal rahe campaigns / ad sets.
      · State = All   → har state ki leads, chats, kharch, cost per lead
      · State chuna   → us state me kaunsa campaign kitni leads de raha hai
    Neeche: Lead Capture me form me likha state (agar form poochhta hai).
@@ -39,6 +39,7 @@ const writeCache = (v) => { try { localStorage.setItem(CACHE, JSON.stringify(v))
 export default function StatesTab({ tab }) {
   const [period, setPeriod] = useState("30");
   const [camp, setCamp] = useState("");
+  const [adset, setAdset] = useState("");
   const [state, setState] = useState("");
   const [running, setRunning] = useState(true);
   const [data, setData] = useState(null);
@@ -61,12 +62,13 @@ export default function StatesTab({ tab }) {
     const R = rangeOf(period);
     const cache = readCache();
     const hit = cache[period];
-    if (!force && hit && hit.since === R.since && hit.until === R.until && Date.now() - Date.parse(hit.at || 0) < 3600000) { setData(hit); return; }
+    /* Purana cache (bina ad set ke) ho to dobara laao */
+    if (!force && hit && hit.level === "adset" && hit.since === R.since && hit.until === R.until && Date.now() - Date.parse(hit.at || 0) < 3600000) { setData(hit); return; }
     const ids = [...new Set(local.accounts.filter((a) => a.platform === "Meta").map((a) => String(a.accountId || "").trim()).filter((x) => /^act_\d+$/.test(x)))];
     if (!ids.length) { setErr("Connect a Meta account in Ad Accounts first."); return; }
     setBusy(true); setErr("");
     try {
-      const r = await fetch("/api/meta/regions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountIds: ids, ...R }) });
+      const r = await fetch("/api/meta/regions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountIds: ids, ...R, level: "adset" }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) setErr(j.error || "Could not load state-wise data from Meta");
       else { setData(j); writeCache({ ...cache, [period]: j }); }
@@ -80,9 +82,15 @@ export default function StatesTab({ tab }) {
 
   const v = useMemo(() => {
     if (!data) return null;
-    const rows = (data.rows || []).filter((r) => !running || activeIds.has(r.campaignId) || !activeIds.size);
+    /* Ad set ka chalna Meta se (adsetActive). Meta ne status na diya ho to ye filter chhod do */
+    const setStatusKnown = (data.rows || []).some((r) => r.adsetActive);
+    const rows = (data.rows || []).filter((r) => !running || ((activeIds.has(r.campaignId) || !activeIds.size) && (!setStatusKnown || !r.adsetId || r.adsetActive)));
     const camps = [...new Map(rows.map((r) => [r.campaignId, r.campaign])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
-    const byCamp = camp ? rows.filter((r) => r.campaignId === camp) : rows;
+    const inCamp = camp ? rows.filter((r) => r.campaignId === camp) : rows;
+    /* Ad sets — campaign chuna ho to sirf uske */
+    const sets = [...new Map(inCamp.filter((r) => r.adsetId).map((r) => [r.adsetId, { id: r.adsetId, name: r.adset || r.adsetId, campaign: r.campaign }])).values()]
+      .sort((a, b) => String(a.campaign).localeCompare(String(b.campaign)) || String(a.name).localeCompare(String(b.name)));
+    const byCamp = adset ? inCamp.filter((r) => r.adsetId === adset) : inCamp;
     const states = {};
     byCamp.forEach((r) => {
       const s = states[r.region] = states[r.region] || { name: r.region, leads: 0, chats: 0, spend: 0, impressions: 0, clicks: 0, camps: new Set() };
@@ -98,8 +106,13 @@ export default function StatesTab({ tab }) {
     }, {})).sort((a, b) => b.leads - a.leads || b.spend - a.spend) : [];
     const withLeads = list.filter((s) => s.leads >= 5);
     const cheapest = withLeads.length ? withLeads.reduce((a, s) => (s.spend / s.leads < a.spend / a.leads ? s : a)) : null;
-    return { camps, list, tot, inState, top: list[0] || null, cheapest, allStates: list.map((s) => s.name).sort() };
-  }, [data, camp, state, running, activeIds]);
+    return { camps, sets, list, tot, inState, top: list[0] || null, cheapest, allStates: list.map((s) => s.name).sort() };
+  }, [data, camp, adset, state, running, activeIds]);
+
+  /* Campaign badla aur chuna hua ad set us campaign ka nahi → ad set hata do */
+  useEffect(() => {
+    if (adset && v && !v.sets.some((x) => x.id === adset)) setAdset("");
+  }, [v, adset]);
 
   /* Form me likha state (Lead Capture) — sirf jinke form me state poochha gaya */
   const formStates = useMemo(() => {
@@ -114,8 +127,8 @@ export default function StatesTab({ tab }) {
     return Object.entries(m).sort((a, b) => b[1] - a[1]);
   }, [local.leads, period]);
 
-  const pgStates = usePaged(v?.list || [], `${camp}|${running}|${period}`);
-  const pgCamp = usePaged(v?.inState || [], `${state}|${camp}|${running}|${period}`);
+  const pgStates = usePaged(v?.list || [], `${camp}|${adset}|${running}|${period}`);
+  const pgCamp = usePaged(v?.inState || [], `${state}|${camp}|${adset}|${running}|${period}`);
   const maxLeads = Math.max(1, ...(v?.list || []).map((s) => s.leads));
   const R = rangeOf(period);
 
@@ -144,14 +157,20 @@ export default function StatesTab({ tab }) {
             {(v?.camps || []).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
           </select><i className="fa-solid fa-chevron-down st-cv" />
         </label>
+        <label className={`st-sel wide${adset ? " on" : ""}`}><i className="fa-solid fa-layer-group" />
+          <select value={adset} onChange={(e) => setAdset(e.target.value)} aria-label="Ad set">
+            <option value="">All {running ? "running " : ""}ad sets{v ? ` (${v.sets.length})` : ""}</option>
+            {(v?.sets || []).map((x) => <option key={x.id} value={x.id}>{camp ? x.name : `${x.name} · ${x.campaign}`}</option>)}
+          </select><i className="fa-solid fa-chevron-down st-cv" />
+        </label>
         <label className={`st-sel${state ? " on" : ""}`}><i className="fa-solid fa-map-location-dot" />
           <select value={state} onChange={(e) => setState(e.target.value)} aria-label="State">
             <option value="">All states{v ? ` (${v.list.length})` : ""}</option>
             {(v?.allStates || []).map((s) => <option key={s} value={s}>{s}</option>)}
           </select><i className="fa-solid fa-chevron-down st-cv" />
         </label>
-        <label className="st-check"><input type="checkbox" checked={running} onChange={(e) => setRunning(e.target.checked)} /> Running campaigns only</label>
-        {camp || state ? <button type="button" className="ph-clear" onClick={() => { setCamp(""); setState(""); }}>Clear</button> : null}
+        <label className="st-check"><input type="checkbox" checked={running} onChange={(e) => setRunning(e.target.checked)} /> Running campaigns &amp; ad sets only</label>
+        {camp || adset || state ? <button type="button" className="ph-clear" onClick={() => { setCamp(""); setAdset(""); setState(""); }}>Clear</button> : null}
       </div>
 
       {err ? <div className="lf-err"><i className="fa-solid fa-triangle-exclamation" /> {err}</div> : null}
@@ -173,7 +192,7 @@ export default function StatesTab({ tab }) {
             <section className="card st-card">
               <div className="st-card-h">
                 <span className="lf-form-ic"><i className="fa-solid fa-map-location-dot" /></span>
-                <div><b>Leads by state</b><small>{camp ? v.camps.find(([id]) => id === camp)?.[1] : "All campaigns"} · click a state to see its campaigns</small></div>
+                <div><b>Leads by state</b><small>{camp ? v.camps.find(([id]) => id === camp)?.[1] : "All campaigns"}{adset ? ` › ${v.sets.find((x) => x.id === adset)?.name || "Ad set"}` : ""} · click a state to see its campaigns</small></div>
               </div>
               {v.list.length ? (
                 <div className="tbl-scroll">
