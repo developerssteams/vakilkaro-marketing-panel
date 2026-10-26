@@ -10,7 +10,7 @@
    Neeche: Lead Capture me form me likha state (agar form poochhta hai).
    ============================================================ */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { readRows } from "../lib/marketing-local";
 import { usePaged } from "./Pager";
 
@@ -38,8 +38,8 @@ const writeCache = (v) => { try { localStorage.setItem(CACHE, JSON.stringify(v))
 
 export default function StatesTab({ tab }) {
   const [period, setPeriod] = useState("30");
-  const [camp, setCamp] = useState("");
-  const [adset, setAdset] = useState("");
+  const [camps, setCamps] = useState([]);     /* khaali = saare */
+  const [adsets, setAdsets] = useState([]);   /* khaali = saare */
   const [state, setState] = useState("");
   const [running, setRunning] = useState(true);
   const [data, setData] = useState(null);
@@ -85,12 +85,12 @@ export default function StatesTab({ tab }) {
     /* Ad set ka chalna Meta se (adsetActive). Meta ne status na diya ho to ye filter chhod do */
     const setStatusKnown = (data.rows || []).some((r) => r.adsetActive);
     const rows = (data.rows || []).filter((r) => !running || ((activeIds.has(r.campaignId) || !activeIds.size) && (!setStatusKnown || !r.adsetId || r.adsetActive)));
-    const camps = [...new Map(rows.map((r) => [r.campaignId, r.campaign])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
-    const inCamp = camp ? rows.filter((r) => r.campaignId === camp) : rows;
+    const campList = [...new Map(rows.map((r) => [r.campaignId, r.campaign])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    const inCamp = camps.length ? rows.filter((r) => camps.includes(r.campaignId)) : rows;
     /* Ad sets — campaign chuna ho to sirf uske */
     const sets = [...new Map(inCamp.filter((r) => r.adsetId).map((r) => [r.adsetId, { id: r.adsetId, name: r.adset || r.adsetId, campaign: r.campaign }])).values()]
       .sort((a, b) => String(a.campaign).localeCompare(String(b.campaign)) || String(a.name).localeCompare(String(b.name)));
-    const byCamp = adset ? inCamp.filter((r) => r.adsetId === adset) : inCamp;
+    const byCamp = adsets.length ? inCamp.filter((r) => adsets.includes(r.adsetId)) : inCamp;
     const states = {};
     byCamp.forEach((r) => {
       const s = states[r.region] = states[r.region] || { name: r.region, leads: 0, chats: 0, spend: 0, impressions: 0, clicks: 0, camps: new Set() };
@@ -106,13 +106,15 @@ export default function StatesTab({ tab }) {
     }, {})).sort((a, b) => b.leads - a.leads || b.spend - a.spend) : [];
     const withLeads = list.filter((s) => s.leads >= 5);
     const cheapest = withLeads.length ? withLeads.reduce((a, s) => (s.spend / s.leads < a.spend / a.leads ? s : a)) : null;
-    return { camps, sets, list, tot, inState, top: list[0] || null, cheapest, allStates: list.map((s) => s.name).sort() };
-  }, [data, camp, adset, state, running, activeIds]);
+    return { camps: campList, sets, list, tot, inState, top: list[0] || null, cheapest, allStates: list.map((s) => s.name).sort() };
+  }, [data, camps, adsets, state, running, activeIds]);
 
-  /* Campaign badla aur chuna hua ad set us campaign ka nahi → ad set hata do */
+  /* Campaign badle aur chune hue ad sets un campaigns ke nahi → unhe hata do */
   useEffect(() => {
-    if (adset && v && !v.sets.some((x) => x.id === adset)) setAdset("");
-  }, [v, adset]);
+    if (!adsets.length || !v) return;
+    const keep = adsets.filter((id) => v.sets.some((x) => x.id === id));
+    if (keep.length !== adsets.length) setAdsets(keep);
+  }, [v, adsets]);
 
   /* Form me likha state (Lead Capture) — sirf jinke form me state poochha gaya */
   const formStates = useMemo(() => {
@@ -127,8 +129,8 @@ export default function StatesTab({ tab }) {
     return Object.entries(m).sort((a, b) => b[1] - a[1]);
   }, [local.leads, period]);
 
-  const pgStates = usePaged(v?.list || [], `${camp}|${adset}|${running}|${period}`);
-  const pgCamp = usePaged(v?.inState || [], `${state}|${camp}|${adset}|${running}|${period}`);
+  const pgStates = usePaged(v?.list || [], `${camps.join(",")}|${adsets.join(",")}|${running}|${period}`);
+  const pgCamp = usePaged(v?.inState || [], `${state}|${camps.join(",")}|${adsets.join(",")}|${running}|${period}`);
   const maxLeads = Math.max(1, ...(v?.list || []).map((s) => s.leads));
   const R = rangeOf(period);
 
@@ -151,18 +153,16 @@ export default function StatesTab({ tab }) {
             {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
           </select><i className="fa-solid fa-chevron-down st-cv" />
         </label>
-        <label className={`st-sel wide${camp ? " on" : ""}`}><i className="fa-solid fa-bullhorn" />
-          <select value={camp} onChange={(e) => setCamp(e.target.value)} aria-label="Campaign">
-            <option value="">All {running ? "running " : ""}campaigns{v ? ` (${v.camps.length})` : ""}</option>
-            {(v?.camps || []).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-          </select><i className="fa-solid fa-chevron-down st-cv" />
-        </label>
-        <label className={`st-sel wide${adset ? " on" : ""}`}><i className="fa-solid fa-layer-group" />
-          <select value={adset} onChange={(e) => setAdset(e.target.value)} aria-label="Ad set">
-            <option value="">All {running ? "running " : ""}ad sets{v ? ` (${v.sets.length})` : ""}</option>
-            {(v?.sets || []).map((x) => <option key={x.id} value={x.id}>{camp ? x.name : `${x.name} · ${x.campaign}`}</option>)}
-          </select><i className="fa-solid fa-chevron-down st-cv" />
-        </label>
+        <MultiPick
+          icon="fa-bullhorn" noun="campaigns" allLabel={`All ${running ? "running " : ""}campaigns`}
+          options={(v?.camps || []).map(([id, name]) => ({ id, label: name }))}
+          value={camps} onChange={setCamps}
+        />
+        <MultiPick
+          icon="fa-layer-group" noun="ad sets" allLabel={`All ${running ? "running " : ""}ad sets`}
+          options={(v?.sets || []).map((x) => ({ id: x.id, label: x.name, sub: camps.length === 1 ? "" : x.campaign }))}
+          value={adsets} onChange={setAdsets}
+        />
         <label className={`st-sel${state ? " on" : ""}`}><i className="fa-solid fa-map-location-dot" />
           <select value={state} onChange={(e) => setState(e.target.value)} aria-label="State">
             <option value="">All states{v ? ` (${v.list.length})` : ""}</option>
@@ -170,7 +170,7 @@ export default function StatesTab({ tab }) {
           </select><i className="fa-solid fa-chevron-down st-cv" />
         </label>
         <label className="st-check"><input type="checkbox" checked={running} onChange={(e) => setRunning(e.target.checked)} /> Running campaigns &amp; ad sets only</label>
-        {camp || adset || state ? <button type="button" className="ph-clear" onClick={() => { setCamp(""); setAdset(""); setState(""); }}>Clear</button> : null}
+        {camps.length || adsets.length || state ? <button type="button" className="ph-clear" onClick={() => { setCamps([]); setAdsets([]); setState(""); }}>Clear</button> : null}
       </div>
 
       {err ? <div className="lf-err"><i className="fa-solid fa-triangle-exclamation" /> {err}</div> : null}
@@ -192,7 +192,7 @@ export default function StatesTab({ tab }) {
             <section className="card st-card">
               <div className="st-card-h">
                 <span className="lf-form-ic"><i className="fa-solid fa-map-location-dot" /></span>
-                <div><b>Leads by state</b><small>{camp ? v.camps.find(([id]) => id === camp)?.[1] : "All campaigns"}{adset ? ` › ${v.sets.find((x) => x.id === adset)?.name || "Ad set"}` : ""} · click a state to see its campaigns</small></div>
+                <div><b>Leads by state</b><small>{pickLabel(camps, v.camps.map(([id, name]) => ({ id, label: name })), "All campaigns", "campaigns")}{adsets.length ? ` › ${pickLabel(adsets, v.sets.map((x) => ({ id: x.id, label: x.name })), "", "ad sets")}` : ""} · click a state to see its campaigns</small></div>
               </div>
               {v.list.length ? (
                 <div className="tbl-scroll">
@@ -262,6 +262,87 @@ export default function StatesTab({ tab }) {
           <p className="st-note"><i className="fa-solid fa-circle-info" /> State comes from Meta — where the person was when they saw the ad. It can differ slightly from the state they type in the form.</p>
         </>
       )}
+    </div>
+  );
+}
+
+/* "All campaigns" · ek chuna to uska naam · zyada chune to "3 campaigns" */
+function pickLabel(value, options, allLabel, noun) {
+  if (!value.length) return allLabel;
+  if (value.length === 1) return options.find((o) => o.id === value[0])?.label || `1 ${noun}`;
+  return `${value.length} ${noun} selected`;
+}
+
+/* ============================================================
+   MultiPick — checkbox wala dropdown (ek saath kai campaigns / ad sets)
+   Kuch na chuna = saare. Search, "Select all" aur "Clear" bhi.
+   ============================================================ */
+function MultiPick({ icon, noun, allLabel, options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  useEffect(() => { if (!open) setQ(""); }, [open]);
+
+  const t = q.trim().toLowerCase();
+  const shown = t ? options.filter((o) => `${o.label} ${o.sub || ""}`.toLowerCase().includes(t)) : options;
+  const set = new Set(value);
+  const toggle = (id) => onChange(set.has(id) ? value.filter((x) => x !== id) : [...value, id]);
+  const label = value.length ? pickLabel(value, options, allLabel, noun) : `${allLabel} (${options.length})`;
+
+  return (
+    <div ref={ref} className={`st-sel wide${value.length ? " on" : ""}`} style={{ padding: 0 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+        style={{ display: "flex", alignItems: "center", gap: 8, height: "100%", width: "100%", padding: "0 30px 0 12px", border: 0, background: "transparent", cursor: "pointer", font: "600 13px var(--font)", color: "#1B2333", minWidth: 0 }}>
+        <i className={`fa-solid ${icon}`} style={{ fontSize: 12, color: "#646B7E" }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 300 }}>{label}</span>
+        {value.length > 1 ? <em style={{ fontStyle: "normal", fontSize: 11, fontWeight: 800, background: "#E8A81C", color: "#fff", borderRadius: 999, padding: "1px 7px" }}>{value.length}</em> : null}
+      </button>
+      <i className={`fa-solid fa-chevron-${open ? "up" : "down"} st-cv`} />
+
+      {open ? (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 60, width: "min(380px, 92vw)", background: "#fff", border: "1px solid #E3E6EF", borderRadius: 14, boxShadow: "0 18px 40px rgba(18,20,28,.16)", overflow: "hidden" }}>
+          <div style={{ padding: 10, borderBottom: "1px solid #EEF0F5" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, height: 34, padding: "0 10px", border: "1px solid #E3E6EF", borderRadius: 10, background: "#F8F9FC" }}>
+              <i className="fa-solid fa-magnifying-glass" style={{ fontSize: 11.5, color: "#959CAE" }} />
+              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${noun}...`}
+                style={{ flex: 1, border: 0, outline: "none", background: "transparent", font: "500 13px var(--font)", minWidth: 0 }} />
+            </label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, fontSize: 12 }}>
+              <span style={{ color: "#5B6478", fontWeight: 600 }}>{value.length ? `${value.length} selected` : `All ${options.length} ${noun}`}</span>
+              <span style={{ display: "flex", gap: 12 }}>
+                <button type="button" onClick={() => onChange([...new Set([...value, ...shown.map((o) => o.id)])])} style={{ border: 0, background: "none", color: "#B7791F", fontWeight: 700, cursor: "pointer", padding: 0 }}>Select all</button>
+                <button type="button" onClick={() => onChange([])} disabled={!value.length} style={{ border: 0, background: "none", color: value.length ? "#B42318" : "#C3C8D4", fontWeight: 700, cursor: value.length ? "pointer" : "default", padding: 0 }}>Clear</button>
+              </span>
+            </div>
+          </div>
+          <div style={{ maxHeight: 300, overflowY: "auto", padding: 6 }}>
+            {shown.length ? shown.map((o) => {
+              const on = set.has(o.id);
+              return (
+                <label key={o.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 9px", borderRadius: 9, cursor: "pointer", background: on ? "#FFF8E6" : "transparent" }}>
+                  <input type="checkbox" checked={on} onChange={() => toggle(o.id)} style={{ marginTop: 2, accentColor: "#E8A81C", width: 15, height: 15, flexShrink: 0 }} />
+                  <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: on ? 700 : 500, color: "#1B2333", wordBreak: "break-word" }}>{o.label}</span>
+                    {o.sub ? <small style={{ fontSize: 11, color: "#7A8295" }}>{o.sub}</small> : null}
+                  </span>
+                </label>
+              );
+            }) : <div style={{ padding: 16, textAlign: "center", fontSize: 12.5, color: "#7A8295" }}>Nothing found</div>}
+          </div>
+          <div style={{ padding: 8, borderTop: "1px solid #EEF0F5", display: "flex", justifyContent: "flex-end" }}>
+            <button type="button" className="btn btn-gold" style={{ height: 32, padding: "0 14px", fontSize: 12.5 }} onClick={() => setOpen(false)}>Done</button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
