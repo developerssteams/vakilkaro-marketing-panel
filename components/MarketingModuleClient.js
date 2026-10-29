@@ -21,6 +21,7 @@ import AccountsBoard from "./AccountsBoard";
 import PaymentHistory from "./PaymentHistory";
 import LeadFormsTab from "./LeadFormsTab";
 import StatesTab from "./StatesTab";
+import ByTimeTab from "./ByTimeTab";
 import { pullMetaLeads, lastLeadPull } from "../lib/meta-pull";
 import { runMetaSync, isoAgo } from "../lib/sync-merge";
 import {
@@ -62,6 +63,7 @@ export default function MarketingModuleClient({ moduleKey }) {
         )
         : tab.type === "leadforms" ? <LeadFormsTab tab={tab} />
         : tab.type === "states" ? <StatesTab tab={tab} />
+        : tab.type === "bytime" ? <ByTimeTab tab={tab} />
         : tab.type === "daywise" ? <LeadDaywise moduleKey={moduleKey} tab={tab} show={show} />
         : tab.type === "broadcast" ? <BroadcastTab moduleKey={moduleKey} tab={tab} show={show} />
         : tab.type === "replies" ? <RepliesTab tab={tab} />
