@@ -234,10 +234,10 @@ function Integrations() {
       icon: "fa-brands fa-whatsapp", tint: "#E1F5EC", color: "#25D366",
       keys: ["WA_TOKEN", "WA_PHONE_ID", "WA_WABA_ID", "WA_WEBHOOK_VERIFY_TOKEN"],
       where: "Meta Business Manager → WhatsApp Manager → API Setup" },
-    { key: "website", title: "Website Leads", sub: "Your website form — no token needed",
+    { key: "website", title: "Website Leads", sub: "Website forms (enquiries, contact, ODR) — read from the website's Hostinger database",
       icon: "fa-solid fa-globe", tint: "#E1F5F2", color: "#0F766E",
-      keys: ["WEBSITE_LEAD_SECRET"],
-      where: "Any long random string — the same value goes in the website form" },
+      keys: ["WEBSITE_DB_HOST", "WEBSITE_DB_NAME", "WEBSITE_DB_USER", "WEBSITE_DB_PASSWORD"],
+      where: "Hostinger hPanel → Databases → Remote MySQL (host + allow Any Host %)" },
   ];
 
   return (

@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from "react";
 import { autoPullExtras } from "../lib/meta-pull";
 import { sharedReady } from "../lib/shared-store";
+import { pullWebsiteLeads } from "../lib/website-pull";
 import { autoSyncNow, readSyncState, readAutoPref, saveAutoPref, isStale, INTERVALS, accountProblems, backoffLeft } from "../lib/sync-merge";
 
 function ago(iso) {
@@ -70,6 +71,7 @@ export default function AutoSync() {
       const r = await autoSyncNow({ force });
       /* campaigns ke baad leads (har 15 min) aur payments (din me ek baar) */
       if (!r.skipped) await autoPullExtras().catch(() => {});
+
       if (r.skipped === "no-accounts" && force) {
         setState({ at: null, ok: false, error: "No Meta account connected — Ad Accounts → Connect Meta Account" });
       }
@@ -97,6 +99,21 @@ export default function AutoSync() {
     document.addEventListener("visibilitychange", onVis);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
   }, [ready, pref.enabled, pref.minutes]);
+
+  /* Website ke forms ki leads (Hostinger DB) — Meta se alag, har minute
+     check, asli pull 5 minute me ek baar (lib/website-pull). Meta ki
+     limit ("wait 6 min") ho tab bhi website leads aati rehti hain. */
+  useEffect(() => {
+    let alive = true;
+    const go = async () => {
+      if (!alive || document.visibilityState !== "visible") return;
+      await sharedReady();
+      await pullWebsiteLeads({ quiet: true }).catch(() => {});
+    };
+    go();
+    const t = setInterval(go, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
 
   /* Bahar click → popover band */
   useEffect(() => {

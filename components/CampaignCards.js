@@ -36,6 +36,13 @@ import {
 
 const DAILY = "campaigns__daily-stats";
 
+/* Website ke teen form (Hostinger DB ki tables) */
+const WEB_FORMS = [
+  { key: "enquiries", label: "Enquiry form", short: "Enquiry", icon: "fa-file-pen", color: "#2F6FED" },
+  { key: "contact_messages", label: "Contact form", short: "Contact", icon: "fa-envelope", color: "#0F766E" },
+  { key: "odr_disputes", label: "ODR dispute", short: "ODR", icon: "fa-scale-balanced", color: "#B45309" },
+];
+
 const PLATFORM_CARDS = [
   { key: "Facebook",  icon: "fa-brands fa-facebook-f", accent: "#1877F2", tint: "#E7F0FE", via: "Meta",       note: "Feed, Reels and Marketplace placements" },
   { key: "Instagram", icon: "fa-brands fa-instagram",  accent: "#C13584", tint: "#FBE9F4", via: "Meta",       note: "Feed, Stories and Explore placements" },
@@ -60,6 +67,9 @@ export default function CampaignCards({ moduleKey, tab, show }) {
   const [adPage, setAdPage] = useState(1);   /* ads list — 10 per page */
   const [acct, setAcct] = useState("");       /* ads list — account filter */
   const [statesFor, setStatesFor] = useState(null);   /* "Leads by state" popup */
+  const [webLeads, setWebLeads] = useState([]);       /* Website forms ki leads (Hostinger DB) */
+  const [webForm, setWebForm] = useState("");         /* "" · enquiries · contact_messages · odr_disputes */
+  const [webPage, setWebPage] = useState(1);
   const plat = flt.platform;
   const rf = flt;
   const setPlat = (v) => setFlt((p) => ({ ...p, platform: v }));
@@ -70,6 +80,7 @@ export default function CampaignCards({ moduleKey, tab, show }) {
       setDaily(readRows(DAILY));
       setAccounts(readRows("ad-accounts__accounts"));
       setProblems(accountProblems());
+      setWebLeads(readRows("lead-capture__inbox-log").filter((l) => l.source === "Website" && String(l.extId || "").startsWith("web-")));
     };
     load();
     window.addEventListener("vk-marketing-updated", load);
@@ -109,6 +120,14 @@ export default function CampaignCards({ moduleKey, tab, show }) {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winKey, hourlyTick, accounts.length]);
+
+  /* Website leads — chuni hui date (ya time) range ki, naye pehle */
+  const webInRange = useMemo(() => webLeads.filter((l) => {
+    if (win) { const t = Date.parse(l.receivedTime || ""); return Number.isFinite(t) && t >= win.fromMs && t <= win.toMs; }
+    return inRange(l.receivedAt, from, to);
+  }).sort((a, b) => String(b.receivedTime || b.receivedAt).localeCompare(String(a.receivedTime || a.receivedAt))), [webLeads, win, from, to]);
+  const webCount = (t) => webInRange.filter((l) => (l.formId || "") === t).length;
+  useEffect(() => { setWebPage(1); }, [webForm, from, to, winKey]);
 
   /* Time filter ki patti — filter ke neeche: kaunsa waqt, load ho raha
      hai ya nahi, Refresh, aur FB/IG andaaza wali baat */
@@ -258,6 +277,8 @@ export default function CampaignCards({ moduleKey, tab, show }) {
     || r.channel === "Facebook" || r.channel === "Instagram"), [statusRows]);
 
   function connection(card) {
+    /* Website ki leads Hostinger DB se aa rahi hain to "Live" */
+    if (card.key === "Website" && daily.some((d) => d.source === "Website DB")) return { label: "Live", cls: "pill-active" };
     if (!card.via) return { label: "Manual", cls: "pill-default" };
     const accs = accounts.filter((a) => String(a.platform || "") === card.via);
     if (!accs.length) return { label: "Not connected", cls: "pill-off" };
@@ -520,6 +541,67 @@ export default function CampaignCards({ moduleKey, tab, show }) {
               sub="WhatsApp / Messenger — counted in Results only when the campaign goal is messaging" icon="fa-brands fa-whatsapp" tone="green" />
           </div>
         ) : null}
+
+        {card.key === "Website" ? (() => {
+          /* Website ki har lead — kis form se aayi aur poori detail */
+          const list = webForm ? webInRange.filter((l) => (l.formId || "") === webForm) : webInRange;
+          const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+          const cur = Math.min(webPage, pages);
+          const shown = list.slice((cur - 1) * PAGE_SIZE, cur * PAGE_SIZE);
+          const when = (l) => {
+            const t = Date.parse(l.receivedTime || "");
+            return Number.isFinite(t) ? new Date(t).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : (l.receivedAt || "—");
+          };
+          return (
+            <div className="card">
+              <div className="card-head">
+                <div className="ttl">
+                  <i className="fa-solid fa-globe" />
+                  <div className="ttl-txt">
+                    <b>Website leads</b>
+                    <span>Every lead from the website forms — which form it came from and full details</span>
+                  </div>
+                </div>
+                <div className="card-tools"><span className="cnt">{list.length} lead{list.length === 1 ? "" : "s"}</span></div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "12px 18px 4px" }}>
+                {[{ key: "", label: "All forms", icon: "fa-layer-group", color: "#1B2333", n: webInRange.length }, ...WEB_FORMS.map((f) => ({ ...f, n: webCount(f.key) }))].map((f) => (
+                  <button type="button" key={f.key || "all"} onClick={() => setWebForm(f.key)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 12px", borderRadius: 999, cursor: "pointer", font: "700 12.5px var(--font)", border: `1px solid ${webForm === f.key ? f.color : "#E3E6EF"}`, background: webForm === f.key ? `color-mix(in srgb, ${f.color} 10%, #fff)` : "#fff", color: webForm === f.key ? f.color : "#3A4254" }}>
+                    <i className={`fa-solid ${f.icon}`} style={{ color: f.color }} /> {f.label}
+                    <em style={{ fontStyle: "normal", fontSize: 11, padding: "1px 7px", borderRadius: 999, background: "#F1F3F8", color: "#1B2333" }}>{f.n}</em>
+                  </button>
+                ))}
+              </div>
+              {shown.length ? (
+                <div className="tbl-scroll">
+                  <table className="mod-table">
+                    <thead><tr><th>Received</th><th>Form</th><th>Name</th><th>Phone</th><th>Email</th><th>Service</th><th>City</th><th>Message</th><th>Page</th></tr></thead>
+                    <tbody>
+                      {shown.map((l) => {
+                        const f = WEB_FORMS.find((x) => x.key === l.formId) || { short: "Website", icon: "fa-globe", color: "#0F766E" };
+                        return (
+                          <tr key={l.id}>
+                            <td style={{ whiteSpace: "nowrap" }}>{when(l)}</td>
+                            <td style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: `color-mix(in srgb, ${f.color} 10%, #fff)`, color: f.color }}><i className={`fa-solid ${f.icon}`} /> {f.short}</span></td>
+                            <td><b>{l.name || "—"}</b></td>
+                            <td style={{ whiteSpace: "nowrap" }}>{l.phone ? <a href={`tel:${l.phone}`}>{l.phone}</a> : "—"}</td>
+                            <td>{l.email ? <a href={`mailto:${l.email}`}>{l.email}</a> : <span className="mut">—</span>}</td>
+                            <td>{l.service || <span className="mut">—</span>}</td>
+                            <td>{l.city || <span className="mut">—</span>}</td>
+                            <td style={{ minWidth: 200, maxWidth: 320, whiteSpace: "normal", fontSize: 12.5, color: "#3A4254" }}>{l.message || <span className="mut">—</span>}</td>
+                            <td>{l.pageUrl ? <a href={l.pageUrl} target="_blank" rel="noreferrer" title={l.pageUrl}><i className="fa-solid fa-arrow-up-right-from-square" /> Open</a> : <span className="mut">—</span>}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <Empty icon="fa-globe" text={webLeads.length ? "No website leads in this range — pick another date range or form." : "No website leads yet. They come from the website database every 5 minutes."} />}
+              <TablePager page={cur} pages={pages} total={list.length} onPage={setWebPage} />
+            </div>
+          );
+        })() : null}
 
         <div className="card">
           <div className="card-head">
@@ -842,6 +924,16 @@ export default function CampaignCards({ moduleKey, tab, show }) {
                 <div><b>{count(d.leads)}</b><span>{isMeta ? "results" : "leads"}</span></div>
                 <div><b>{d.spend > 0 && d.leads ? money(d.spend / d.leads) : "—"}</b><span>{isMeta ? "per result" : "per lead"}</span></div>
               </div>
+              {c.key === "Website" ? (
+                /* Website — kis form se kitni leads */
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
+                  {WEB_FORMS.map((f) => (
+                    <span key={f.key} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, background: `color-mix(in srgb, ${f.color} 10%, #fff)`, color: f.color, border: `1px solid color-mix(in srgb, ${f.color} 22%, #fff)` }}>
+                      <i className={`fa-solid ${f.icon}`} /> {f.short} {webCount(f.key)}
+                    </span>
+                  ))}
+                </div>
+              ) : (
               <div className="lg-status">
                 <div className="lg-status-bar" aria-hidden="true">
                   <i className="on" style={{ flex: d.live || 0 }} />
@@ -850,6 +942,7 @@ export default function CampaignCards({ moduleKey, tab, show }) {
                 </div>
                 <span>{d.live} live, {d.paused} paused{d.blocked ? `, ${d.blocked} blocked` : ""}</span>
               </div>
+              )}
               <span className="lg-open">Open {c.key} campaigns</span>
             </button>
           );

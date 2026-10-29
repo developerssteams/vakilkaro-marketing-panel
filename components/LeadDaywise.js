@@ -19,6 +19,14 @@ import {
 } from "./ModuleParts";
 
 const SOURCES = ["Meta", "Google", "Website", "WhatsApp", "Referral", "Marketplace", "Other"];
+/* Source filter ke options — Meta ki leads "Facebook" / "Instagram" naam se aati hain */
+const SOURCE_FILTER = [
+  { v: "Facebook", l: "Facebook" },
+  { v: "Instagram", l: "Instagram" },
+  { v: "Meta", l: "Meta (Facebook + Instagram)" },
+  ...SOURCES.filter((x) => x !== "Meta").map((x) => ({ v: x, l: x })),
+];
+const META_SOURCES = new Set(["Meta", "Facebook", "Instagram"]);
 const RANGES = [
   { key: "today", label: "Today", days: 0 },
   { key: "7", label: "Last 7 days", days: 7 },
@@ -46,7 +54,8 @@ export default function LeadDaywise({ moduleKey, tab, show }) {
   const [flag, setFlag] = useState("");
   const [staff, setStaff] = useState("");
   const [stateF, setStateF] = useState("");   /* state filter */
-  const [campF, setCampF] = useState("");     /* campaign filter */
+  const [campF, setCampF] = useState("");     /* campaign filter — naam, ya __active / __paused */
+  const [camps, setCamps] = useState([]);     /* campaigns ka status (Active / Paused) */
   const [openDay, setOpenDay] = useState(null);
   const [modal, setModal] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -63,13 +72,26 @@ export default function LeadDaywise({ moduleKey, tab, show }) {
   }, []);
 
   useEffect(() => {
-    const load = () => setRows(readRows(ds));
+    const load = () => { setRows(readRows(ds)); setCamps(readRows("campaigns__live-ads")); };
     load();
     window.addEventListener("vk-marketing-updated", load);
     return () => window.removeEventListener("vk-marketing-updated", load);
   }, [ds]);
 
   const dateOf = (r) => String(r[tab.dateField] || r.createdAt || "").slice(0, 10);
+
+  /* Campaign ka naam → chal raha hai ya nahi (Campaigns list se) */
+  const campStatus = useMemo(() => {
+    const m = new Map();
+    camps.forEach((c) => {
+      const k = String(c.name || "").trim().toLowerCase();
+      if (!k) return;
+      if (String(c.status) === "Active") m.set(k, "active");
+      else if (!m.has(k)) m.set(k, "paused");
+    });
+    return m;
+  }, [camps]);
+  const statusOf = (name) => campStatus.get(String(name || "").trim().toLowerCase()) || "";
 
   /* Filters lagane ke baad ka data — saare views isi par bante hain. */
   const filtered = useMemo(() => {
@@ -79,15 +101,17 @@ export default function LeadDaywise({ moduleKey, tab, show }) {
       const d = dateOf(r);
       if (spec.key === "today" && d !== iso(new Date())) return false;
       if (from && spec.key !== "today" && d < from) return false;
-      if (source && String(r.source || "") !== source) return false;
+      if (source && (source === "Meta" ? !META_SOURCES.has(String(r.source || "")) : String(r.source || "") !== source)) return false;
       if (service && String(r.service || "") !== service) return false;
       if (flag && String(r.flag || "") !== flag) return false;
       if (staff && String(r.assignedTo || "") !== staff) return false;
-      if (campF && String(r.campaign || "") !== campF) return false;
+      if (campF === "__active" ? statusOf(r.campaign) !== "active"
+        : campF === "__paused" ? statusOf(r.campaign) !== "paused"
+        : campF && String(r.campaign || "") !== campF) return false;
       if (stateF && (stateF === "__none" ? leadState(r).state : leadState(r).state !== stateF)) return false;
       return true;
     });
-  }, [rows, range, source, service, flag, staff, campF, stateF]);
+  }, [rows, range, source, service, flag, staff, campF, stateF, campStatus]);
 
   const services = useMemo(() => [...new Set(rows.map((r) => r.service).filter(Boolean))].sort(), [rows]);
   const staffList = useMemo(() => [...new Set(rows.map((r) => r.assignedTo).filter(Boolean))].sort(), [rows]);
@@ -341,7 +365,7 @@ export default function LeadDaywise({ moduleKey, tab, show }) {
           </select>
           <select className="form-control" value={source} onChange={(e) => setSource(e.target.value)}>
             <option value="">All sources</option>
-            {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {SOURCE_FILTER.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
           </select>
           <select className="form-control" value={service} onChange={(e) => setService(e.target.value)}>
             <option value="">All services</option>
@@ -359,7 +383,16 @@ export default function LeadDaywise({ moduleKey, tab, show }) {
           </select>
           <select className="form-control" value={campF} onChange={(e) => setCampF(e.target.value)} title="Filter by campaign">
             <option value="">All campaigns</option>
-            {campList.map((c) => <option key={c} value={c}>{c}</option>)}
+            <option value="__active">● Active campaigns</option>
+            <option value="__paused">● Paused campaigns</option>
+            {[["active", "Active"], ["paused", "Paused"], ["", "Other (website / old)"]].map(([k, l]) => {
+              const list = campList.filter((c) => statusOf(c) === k);
+              return list.length ? (
+                <optgroup key={k || "other"} label={l}>
+                  {list.map((c) => <option key={c} value={c}>{c}</option>)}
+                </optgroup>
+              ) : null;
+            })}
           </select>
           <select className="form-control" value={stateF} onChange={(e) => setStateF(e.target.value)} title="Filter by state">
             <option value="">All states</option>
@@ -521,7 +554,7 @@ export default function LeadDaywise({ moduleKey, tab, show }) {
         <div className="card">
           <div className="card-head">
             <div className="ttl"><i className="fa-solid fa-map-location-dot" /> &nbsp;State-wise summary</div>
-            <div className="card-tools"><span className="cnt">{campF ? campF : "All campaigns"} · click a state to see its leads</span></div>
+            <div className="card-tools"><span className="cnt">{campF === "__active" ? "Active campaigns" : campF === "__paused" ? "Paused campaigns" : campF || "All campaigns"} · click a state to see its leads</span></div>
           </div>
           {byState.length ? (
             <div className="tbl-scroll">
