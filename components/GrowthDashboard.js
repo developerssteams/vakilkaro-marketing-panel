@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DATASETS } from "../lib/marketing-config";
 import { readRows } from "../lib/marketing-local";
 import { prepaidBalances } from "../lib/meta-pull";
+import { OBJECTIVES, objectiveOf, objectiveFromResult } from "../lib/objectives";
 
 /* ---------- helpers ---------- */
 const n = (v) => { const x = Number(v || 0); return Number.isFinite(x) ? x : 0; };
@@ -142,6 +143,7 @@ export default function GrowthDashboard({ userName = "" }) {
   const [range, setRange] = useState("30");
   const [stamp, setStamp] = useState(null);
   const [prepaid, setPrepaid] = useState(null);
+  const [obj, setObj] = useState("");   /* Results / Cost per result kis objective ke — "" = sab */
 
   useEffect(() => {
     try { const r = localStorage.getItem("vk_dash_range"); if (r && RANGES.some((x) => x.key === r)) setRange(r); } catch { /* */ }
@@ -250,6 +252,38 @@ export default function GrowthDashboard({ userName = "" }) {
       totalLeads: inbox.length,
     };
   }, [d, R]);
+
+  /* Results + Cost per result — objective ke hisaab se (Leads, Calls, Messages…).
+     Har daily row ka objective uske campaign se; campaign na mile to result ke type se. */
+  const om = useMemo(() => {
+    if (!d) return null;
+    const byExt = new Map(); const byName = new Map();
+    (d.liveAds || []).forEach((c) => {
+      const o = objectiveOf(c);
+      if (c.extId) byExt.set(String(c.extId), o);
+      if (c.name) byName.set(String(c.name).toLowerCase(), o);
+    });
+    const objOf = (r) => (r.extId && byExt.get(String(r.extId))) || byName.get(String(r.campaign || "").toLowerCase()) || objectiveFromResult(r.resultLabel) || "";
+    const inR = (x) => x >= R.from && x <= R.to;
+    const inP = (x) => x >= R.pFrom && x <= R.pTo;
+    const blank = () => ({ spend: 0, results: 0, form: 0, chats: 0 });
+    const cur = blank(); const prev = blank(); const counts = {};
+    const byDay = {}; R.list.forEach((x) => { byDay[x] = 0; });
+    (d.dailyStats || []).forEach((r) => {
+      if (!r.date) return;
+      const dt = String(r.date).slice(0, 10);
+      const a = inR(dt); const b = inP(dt);
+      if (!a && !b) return;
+      const o = objOf(r);
+      if (a && o) counts[o] = (counts[o] || 0) + 1;
+      if (obj && o !== obj) return;
+      const t = a ? cur : prev;
+      const res = n(r.results ?? r.leads);
+      t.spend += n(r.spend); t.results += res; t.form += n(r.formLeads); t.chats += n(r.chats);
+      if (a && dt in byDay) byDay[dt] += res;
+    });
+    return { cur, prev, counts, series: R.list.map((x) => byDay[x]) };
+  }, [d, R, obj]);
 
   if (!m) return <div className="gd"><div className="gd-skel" /></div>;
 
@@ -361,10 +395,22 @@ export default function GrowthDashboard({ userName = "" }) {
         <div className="gd-kpis">
           <Kpi icon="fa-indian-rupee-sign" tone="gold" label="Amount spent" help="Total paid to Meta for ads in this period (Facebook + Instagram)."
             value={m.cur.spend} fmt={(v) => inr(v)} prev={m.prev.spend} spark={spark("spend")} goodWhen="neutral" sub={`${inr(m.cur.spend / Math.max(1, R.days))} per day on average`} />
-          <Kpi icon="fa-bullseye" tone="blue" label="Results" help="Same as the Results column in Ads Manager — form leads plus WhatsApp/Messenger chats."
-            value={m.cur.results} fmt={num} prev={m.prev.results} spark={spark("results")} sub={`${num(m.cur.form)} form leads · ${num(m.cur.chats)} chats`} />
-          <Kpi icon="fa-tag" tone="violet" label="Cost per result" help="Amount spent ÷ results. Lower is better."
-            value={cpr} fmt={(v) => (v ? inr(v, 2) : "—")} prev={cprPrev} goodWhen="down" sub="Lower is better" />
+          <Kpi icon="fa-bullseye" tone="blue" label="Results"
+            action={(
+              /* Objective dropdown — Results aur Cost per result isi ke hisaab se */
+              <label title="Results and cost for this objective" style={{ position: "relative", display: "flex", alignItems: "center", width: "100%" }}>
+                <select value={obj} onChange={(e) => setObj(e.target.value)} aria-label="Objective"
+                  style={{ appearance: "none", WebkitAppearance: "none", height: 30, padding: "0 26px 0 10px", borderRadius: 9, border: `1px solid ${obj ? "#E8A81C" : "#E3E6EF"}`, background: obj ? "#FFFBF0" : "#fff", font: "700 12px var(--font)", color: "#1B2333", cursor: "pointer", width: "100%" }}>
+                  <option value="">All objectives</option>
+                  {OBJECTIVES.map((o) => <option key={o.key} value={o.key}>{o.key}{om?.counts[o.key] ? "" : " (no data)"}</option>)}
+                </select>
+                <i className="fa-solid fa-chevron-down" style={{ position: "absolute", right: 9, fontSize: 9, color: "#959CAE", pointerEvents: "none" }} />
+              </label>
+            )}
+            help="Same as the Results column in Ads Manager — form leads plus WhatsApp/Messenger chats. Use the objective buttons above to see one objective."
+            value={om.cur.results} fmt={num} prev={om.prev.results} spark={om.series} sub={`${num(om.cur.form)} form leads · ${num(om.cur.chats)} chats${obj ? ` · ${inr(om.cur.spend)} spent` : ""}`} />
+          <Kpi icon="fa-tag" tone="violet" label={obj === "Leads" ? "Cost per lead" : obj === "Calls" ? "Cost per call" : obj === "Messages" ? "Cost per chat" : obj ? `Cost per result · ${obj}` : "Cost per result"} help="Amount spent ÷ results (of the chosen objective). Lower is better."
+            value={om.cur.results ? om.cur.spend / om.cur.results : 0} fmt={(v) => (v ? inr(v, 2) : "—")} prev={om.prev.results ? om.prev.spend / om.prev.results : 0} goodWhen="down" sub={obj ? `${inr(om.cur.spend)} ÷ ${num(om.cur.results)} ${obj.toLowerCase()}` : "Lower is better"} />
           <Kpi icon="fa-user-plus" tone="green" label="Leads in panel" help="Leads that actually reached Lead Capture (with name and phone)."
             value={m.leads} fmt={num} prev={m.leadsPrev} spark={spark("leads")} sub={`${num(m.todayLeads)} today · ${num(m.dup)} duplicates`} />
           <Kpi icon="fa-handshake" tone="aqua" label="Clients won" help="Leads whose stage is “Converted”."
@@ -513,7 +559,7 @@ function Period({ range, R, RW, stamp, onPick }) {
   );
 }
 
-function Kpi({ icon, tone, label, help, value, fmt, prev, spark, sub, goodWhen = "up" }) {
+function Kpi({ icon, tone, label, help, value, fmt, prev, spark, sub, goodWhen = "up", action = null }) {
   const v = useCountUp(value);
   const delta = prev > 0 ? pct(value - prev, prev) : null;
   const up = delta !== null && delta >= 0;
@@ -526,6 +572,7 @@ function Kpi({ icon, tone, label, help, value, fmt, prev, spark, sub, goodWhen =
         <span className="gd-kpi-ic"><i className={`fa-solid ${icon}`} /></span>
         <span className="gd-kpi-l">{label}<i className="fa-regular fa-circle-question gd-help" aria-label={help} /></span>
       </div>
+      {action ? <div style={{ margin: "-4px 0 10px" }}>{action}</div> : null}
       <div className="gd-kpi-v">{fmt(v)}</div>
       <div className={`gd-delta ${cls}`}>
         <i className={`fa-solid ${delta === null || flat ? "fa-minus" : up ? "fa-arrow-up" : "fa-arrow-down"}`} /> {words}
