@@ -223,6 +223,178 @@ export default function ByTimeTab({ tab }) {
   );
 }
 
+/* ============================================================
+   ByPagesTab — Campaigns → "By Pages"
+   Kis Facebook Page ke ads se kitni leads aayi. Filter wahi: period ·
+   campaigns (ek saath kai) · sirf chal rahe campaigns. Page pe click →
+   us Page ke campaigns.
+   ============================================================ */
+const PCACHE = "vk_meta_pages";
+export function ByPagesTab({ tab }) {
+  const [period, setPeriod] = useState("7");
+  const [camps, setCamps] = useState([]);
+  const [running, setRunning] = useState(true);
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [open, setOpen] = useState("");          /* khula hua Page */
+  const [local, setLocal] = useState({ camps: [], accounts: [] });
+
+  useEffect(() => {
+    const load = () => setLocal({ camps: readRows("campaigns__live-ads"), accounts: readRows("ad-accounts__accounts") });
+    load();
+    window.addEventListener("vk-marketing-updated", load);
+    return () => window.removeEventListener("vk-marketing-updated", load);
+  }, []);
+
+  async function fetchData(force = false) {
+    const R = rangeOf(period);
+    let cache = {}; try { cache = JSON.parse(localStorage.getItem(PCACHE) || "{}"); } catch { cache = {}; }
+    const hit = cache[period];
+    if (!force && hit && hit.since === R.since && hit.until === R.until && Date.now() - Date.parse(hit.at || 0) < 30 * 60000) { setData(hit); return; }
+    const ids = [...new Set(local.accounts.filter((a) => a.platform === "Meta").map((a) => String(a.accountId || "").trim()).filter((x) => /^act_\d+$/.test(x)))];
+    if (!ids.length) { setErr("Connect a Meta account in Ad Accounts first."); return; }
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch("/api/meta/hour-of-day", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountIds: ids, ...R, by: "page" }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) setErr(j.error || "Could not load page-wise data from Meta");
+      else { setData(j); try { localStorage.setItem(PCACHE, JSON.stringify({ ...cache, [period]: j })); } catch { /* */ } }
+    } catch { setErr("Could not reach the server"); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { if (local.accounts.length) fetchData(); }, [period, local.accounts.length]);
+
+  const activeIds = useMemo(() => new Set(local.camps.filter((c) => String(c.status) === "Active" && c.extId).map((c) => String(c.extId))), [local.camps]);
+
+  const v = useMemo(() => {
+    if (!data) return null;
+    const rows = (data.rows || []).filter((r) => !running || activeIds.has(r.campaignId) || !activeIds.size);
+    const campList = [...new Map(rows.map((r) => [r.campaignId, r.campaign])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    const mine = camps.length ? rows.filter((r) => camps.includes(r.campaignId)) : rows;
+    const pages = new Map();
+    mine.forEach((r) => {
+      const k = r.pageId || "—";
+      const p = pages.get(k) || { id: k, name: r.page, leads: 0, chats: 0, spend: 0, impressions: 0, ads: 0, camps: [] };
+      p.leads += r.leads; p.chats += r.chats; p.spend += r.spend; p.impressions += r.impressions; p.ads += r.ads;
+      p.camps.push(r);
+      pages.set(k, p);
+    });
+    const list = [...pages.values()].sort((a, b) => b.leads - a.leads || b.spend - a.spend);
+    const tot = list.reduce((t, p) => ({ leads: t.leads + p.leads, chats: t.chats + p.chats, spend: t.spend + p.spend }), { leads: 0, chats: 0, spend: 0 });
+    const withLeads = list.filter((p) => p.leads >= 3);
+    const cheapest = withLeads.length ? withLeads.reduce((a, p) => (p.spend / p.leads < a.spend / a.leads ? p : a)) : null;
+    return { campList, list, tot, top: list[0]?.leads ? list[0] : null, cheapest };
+  }, [data, camps, running, activeIds]);
+
+  const R = rangeOf(period);
+  const maxL = Math.max(1, ...(v?.list || []).map((p) => p.leads));
+  const sel = v?.list.find((p) => p.id === open) || null;
+
+  return (
+    <div className="st">
+      <div className="lf-head">
+        <div className="pg-desc" style={{ marginTop: 0 }}>{tab.description}</div>
+        <div className="lf-acts">
+          {data?.at ? <span className="lf-at"><i className="fa-solid fa-rotate" /> Loaded {new Date(data.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span> : null}
+          <button type="button" className="btn btn-gold" disabled={busy} onClick={() => fetchData(true)}>
+            <i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-rotate"}`} /> {busy ? "Loading from Meta..." : "Refresh from Meta"}
+          </button>
+        </div>
+      </div>
+
+      <div className="st-filters">
+        <label className="st-sel"><i className="fa-regular fa-calendar" />
+          <select value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Period">
+            {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select><i className="fa-solid fa-chevron-down st-cv" />
+        </label>
+        <MultiPick
+          icon="fa-bullhorn" noun="campaigns" allLabel={`All ${running ? "running " : ""}campaigns`}
+          options={(v?.campList || []).map(([id, name]) => ({ id, label: name }))}
+          value={camps} onChange={setCamps}
+        />
+        <label className="st-check"><input type="checkbox" checked={running} onChange={(e) => setRunning(e.target.checked)} /> Running campaigns only</label>
+        {camps.length ? <button type="button" className="ph-clear" onClick={() => setCamps([])}>Clear</button> : null}
+      </div>
+
+      {err ? <div className="lf-err"><i className="fa-solid fa-triangle-exclamation" /> {err}</div> : null}
+      {data?.errors?.length ? <div className="lf-err warn"><i className="fa-solid fa-circle-info" /> {data.errors.map((e) => e.message).join(" · ")}</div> : null}
+
+      {!v ? (
+        <div className="card"><div className="lf-empty"><i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-flag"}`} /><b>{busy ? "Reading page-wise data from Meta..." : "No data yet"}</b><span>Press "Refresh from Meta".</span></div></div>
+      ) : (
+        <>
+          <div className="lf-stats">
+            <div><span>Form leads</span><b>{num(v.tot.leads)}</b><em>{R.since === R.until ? R.since : `${R.since} → ${R.until}`}</em></div>
+            <div><span>Pages with ads</span><b>{v.list.length}</b><em>{num(v.tot.chats)} chats · {inr(v.tot.spend)} spend</em></div>
+            <div><span>Top page</span><b className="st-txt">{v.top ? v.top.name : "—"}</b><em>{v.top ? `${num(v.top.leads)} leads · ${pct(v.top.leads, v.tot.leads).toFixed(0)}%` : ""}</em></div>
+            <div><span>Cheapest page</span><b className="st-txt">{v.cheapest ? v.cheapest.name : "—"}</b><em>{v.cheapest ? `${inr(v.cheapest.spend / v.cheapest.leads, 2)} per lead` : "needs 3+ leads"}</em></div>
+          </div>
+
+          <section className="card st-card">
+            <div className="st-card-h">
+              <span className="lf-form-ic"><i className="fa-solid fa-flag" /></span>
+              <div><b>Leads by page</b><small>{camps.length === 1 ? v.campList.find(([id]) => id === camps[0])?.[1] : camps.length ? `${camps.length} campaigns` : "All campaigns"} · click a page to see its campaigns</small></div>
+            </div>
+            {v.list.length ? (
+              <div className="tbl-scroll">
+                <table className="mod-table st-t">
+                  <thead><tr><th>#</th><th>Page</th><th className="ta-r">Form leads</th><th>Share</th><th className="ta-r">Chats</th><th className="ta-r">Spend</th><th className="ta-r">Cost / lead</th><th className="ta-r">Campaigns</th><th className="ta-r">Ads</th></tr></thead>
+                  <tbody>
+                    {v.list.map((p, i) => (
+                      <tr key={p.id} onClick={() => setOpen(open === p.id ? "" : p.id)} style={{ cursor: "pointer", background: open === p.id ? "#FFFBF0" : undefined }}>
+                        <td className="mut">{i + 1}</td>
+                        <td><b><i className="fa-brands fa-facebook" style={{ color: "#1877F2", marginRight: 6 }} />{p.name}</b>{p.id !== "—" ? <small className="mut" style={{ display: "block" }}>ID {p.id}</small> : null}</td>
+                        <td className="ta-r"><b>{num(p.leads)}</b></td>
+                        <td><span className="st-bar"><i style={{ width: `${(p.leads / maxL) * 100}%` }} /></span><small className="mut"> {pct(p.leads, v.tot.leads).toFixed(1)}%</small></td>
+                        <td className="ta-r">{num(p.chats)}</td>
+                        <td className="ta-r">{inr(p.spend, 2)}</td>
+                        <td className="ta-r">{p.leads ? inr(p.spend / p.leads, 2) : <span className="mut">—</span>}</td>
+                        <td className="ta-r">{new Set(p.camps.map((c) => c.campaignId)).size}</td>
+                        <td className="ta-r">{num(p.ads)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <div className="lf-empty"><i className="fa-solid fa-flag" /><b>No ads ran in this period</b><span>Pick another period or campaign.</span></div>}
+          </section>
+
+          {sel ? (
+            <section className="card st-card">
+              <div className="st-card-h">
+                <span className="lf-form-ic"><i className="fa-solid fa-bullhorn" /></span>
+                <div><b>{sel.name}</b><small>Campaigns running ads from this page</small></div>
+                <button type="button" className="ph-clear" style={{ marginLeft: "auto" }} onClick={() => setOpen("")}>Close</button>
+              </div>
+              <div className="tbl-scroll">
+                <table className="mod-table st-t">
+                  <thead><tr><th>Campaign</th><th className="ta-r">Form leads</th><th className="ta-r">Chats</th><th className="ta-r">Spend</th><th className="ta-r">Cost / lead</th><th className="ta-r">Ads</th></tr></thead>
+                  <tbody>
+                    {[...sel.camps].sort((a, b) => b.leads - a.leads || b.spend - a.spend).map((c) => (
+                      <tr key={c.campaignId}>
+                        <td><b>{c.campaign}</b></td>
+                        <td className="ta-r"><b>{num(c.leads)}</b></td>
+                        <td className="ta-r">{num(c.chats)}</td>
+                        <td className="ta-r">{inr(c.spend, 2)}</td>
+                        <td className="ta-r">{c.leads ? inr(c.spend / c.leads, 2) : <span className="mut">—</span>}</td>
+                        <td className="ta-r">{num(c.ads)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
+
+          <p className="st-note"><i className="fa-solid fa-circle-info" /> The page is the Facebook Page each ad runs from. Leads come from Meta for the chosen period; one campaign can run ads from more than one page.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* "All campaigns" · ek chuna to uska naam · zyada chune to "3 campaigns" */
 function pickLabel(value, options, allLabel, noun) {
   if (!value.length) return allLabel;

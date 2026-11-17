@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "../../../../lib/session";
 import { metaConfig } from "../../../../lib/platform-config";
-import { fetchHourOfDay } from "../../../../lib/meta-api";
+import { fetchHourOfDay, fetchPageBreakdown } from "../../../../lib/meta-api";
 
 /* POST { accountIds, since, until } → Campaigns → "By Time":
-   har campaign ki din ke har ghante ki leads / chats / kharch */
+   har campaign ki din ke har ghante ki leads / chats / kharch
+   POST { ..., by: "page" } → Campaigns → "By Pages":
+   kis Facebook Page ke ads se kitni leads / chats / kharch */
 export async function POST(request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -15,7 +17,7 @@ export async function POST(request) {
   const day = /^\d{4}-\d{2}-\d{2}$/;
   if (!day.test(String(d.since || "")) || !day.test(String(d.until || ""))) return NextResponse.json({ error: "Bad date range" }, { status: 400 });
   try {
-    const r = await fetchHourOfDay(ids, d.since, d.until);
+    const r = d.by === "page" ? await fetchPageBreakdown(ids, d.since, d.until) : await fetchHourOfDay(ids, d.since, d.until);
     return NextResponse.json({ ok: true, ...r, since: d.since, until: d.until, at: new Date().toISOString() });
   } catch (e) {
     return NextResponse.json({ error: e?.message || "Could not load hour-wise data" }, { status: 502 });
