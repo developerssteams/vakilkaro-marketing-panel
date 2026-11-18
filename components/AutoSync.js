@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import { autoPullExtras } from "../lib/meta-pull";
 import { sharedReady } from "../lib/shared-store";
 import { pullWebsiteLeads } from "../lib/website-pull";
-import { autoSyncNow, readSyncState, readAutoPref, saveAutoPref, isStale, INTERVALS, accountProblems, backoffLeft } from "../lib/sync-merge";
+import { autoConnectMeta, autoSyncNow, readSyncState, readAutoPref, saveAutoPref, isStale, INTERVALS, accountProblems, backoffLeft } from "../lib/sync-merge";
 
 function ago(iso) {
   if (!iso) return "never";
@@ -99,6 +99,13 @@ export default function AutoSync() {
     document.addEventListener("visibilitychange", onVis);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
   }, [ready, pref.enabled, pref.minutes]);
+
+  /* Panel khulte hi — koi Meta account juda na ho to server ke token se
+     apne aap jod do (har naye browser / user pe "Connect" na karna pade) */
+  useEffect(() => {
+    if (!ready) return;
+    sharedReady().then(() => autoConnectMeta()).catch(() => {});
+  }, [ready]);
 
   /* Website ke forms ki leads (Hostinger DB) — Meta se alag, har minute
      check, asli pull 5 minute me ek baar (lib/website-pull). Meta ki
