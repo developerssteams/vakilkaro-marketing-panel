@@ -13,6 +13,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { readRows } from "../lib/marketing-local";
+import { TablePager } from "./Pager";
 
 const CACHE = "vk_meta_hours";
 const PERIODS = [
@@ -666,6 +667,409 @@ function MultiPick({ icon, noun, allLabel, options, value, onChange }) {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+
+/* ============================================================
+   LEAD REPORT (sidebar → "Lead Report", page app/lead-report)
+
+   CRM ki leads — jis date range me lead BANI, wo sab, aur har lead
+   ABHI kis stage pe hai. Isi se "pichhle mahine 5k leads aayi, ab kaun
+   kis stage pe hai" dikhta hai.
+     · Upar har stage ka box (gintī + %) — box dabao to usi stage ki leads
+     · Filter: stage · naam/phone · service keyword (jaise "TM") ·
+       service · staff · source · campaign · pipeline
+     · "Breakdown" table: mahina / hafta / din / service / staff / source /
+       campaign  ×  stages
+     · Leads ki list + CSV export (jo filter laga hai wahi leads)
+   Data CRM ke MySQL se (sirf padhte hain, kuch badalte nahi).
+   ============================================================ */
+const LR_PERIODS = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "7", label: "Last 7 days" },
+  { key: "30", label: "Last 30 days" },
+  { key: "month", label: "This month" },
+  { key: "lastmonth", label: "Last month" },
+  { key: "90", label: "Last 90 days" },
+  { key: "year", label: "This year" },
+  { key: "custom", label: "Custom dates" },
+];
+const LR_GROUPS = [
+  { key: "month", label: "Month" }, { key: "week", label: "Week" }, { key: "day", label: "Day" },
+  { key: "service", label: "Service" }, { key: "staff", label: "Staff" }, { key: "source", label: "Source" },
+  { key: "campaign", label: "Campaign" }, { key: "pipeline", label: "Pipeline" },
+];
+/* Chhote naam → service me kya likha hota hai (keyword search ke liye) */
+const LR_ALIAS = {
+  tm: ["trademark", "trade mark"], gst: ["goods and service"], itr: ["income tax return", "income tax"],
+  pvt: ["private limited", "pvt ltd"], llp: ["limited liability"], opc: ["one person"],
+  fssai: ["food licen"], msme: ["udyam", "udyog"], iec: ["import export"], dsc: ["digital signature"],
+  ngo: ["trust", "society", "section 8"], roc: ["annual filing", "annual compliance"],
+  pf: ["provident fund", "epf"], esi: ["esic"], copyright: ["copy right"],
+};
+const LR_PER = 25;
+const MONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function lrRange(key, cf, ct) {
+  const now = new Date();
+  const from = new Date(now); const to = new Date(now);
+  if (key === "custom") return { from: cf || iso(now), to: ct || iso(now) };
+  if (key === "yesterday") { from.setDate(from.getDate() - 1); to.setDate(to.getDate() - 1); }
+  else if (key === "month") from.setDate(1);
+  else if (key === "lastmonth") { from.setDate(1); from.setMonth(from.getMonth() - 1); to.setDate(0); }
+  else if (key === "year") { from.setMonth(0, 1); }
+  else if (key !== "today") from.setDate(from.getDate() - (Number(key) - 1));
+  return { from: iso(from), to: iso(to) };
+}
+const lrDate = (s) => {
+  const [d, t] = String(s || "").split(" ");
+  const [y, m, dd] = (d || "").split("-").map(Number);
+  if (!m) return "";
+  const [hh, mm] = (t || "0:0").split(":").map(Number);
+  return `${dd} ${MONS[m - 1]} ${y}, ${((hh + 11) % 12) + 1}:${z(mm || 0)} ${hh < 12 ? "AM" : "PM"}`;
+};
+const lrShort = (isoDay) => { const [y, m, d] = String(isoDay).split("-").map(Number); return m ? `${d} ${MONS[m - 1]} ${y}` : ""; };
+function lrStageTone(label) {
+  const s = String(label || "").toLowerCase();
+  if (/won|converted|closed won|paid/.test(s)) return { c: "#1E8A54", bg: "#E8F6EE" };
+  if (/lost|not interested|junk|reject|invalid|wrong|dead|spam/.test(s)) return { c: "#C0392B", bg: "#FDECEC" };
+  if (/not answer|no answer|unanswer|not reach|switch|rnr|busy/.test(s)) return { c: "#E2621B", bg: "#FFF1E8" };
+  if (/proposal|quot|negotiat|payment|invoice/.test(s)) return { c: "#7C3AED", bg: "#F2ECFE" };
+  if (/follow|call back|callback|interested|hot|warm|meeting|contacted/.test(s)) return { c: "#B7791F", bg: "#FFF6E0" };
+  if (/new|fresh|open|unassigned/.test(s)) return { c: "#2a78d6", bg: "#EAF2FD" };
+  return { c: "#475569", bg: "#F1F3F8" };
+}
+/* "TM" → service/campaign me "TM" shabd ya "Trademark" ho */
+function lrKeyword(text, kw) {
+  const terms = String(kw || "").toLowerCase().split(",").map((x) => x.trim()).filter(Boolean);
+  if (!terms.length) return true;
+  const t = ` ${String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+  return terms.some((term) => {
+    const clean = term.replace(/[^a-z0-9]+/g, " ").trim();
+    if (!clean) return false;
+    const hit = clean.length <= 3 ? t.includes(` ${clean} `) : t.includes(clean);
+    return hit || (LR_ALIAS[clean] || []).some((a) => t.includes(a));
+  });
+}
+function lrWeek(day) {
+  const d = new Date(`${day}T00:00:00`);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return iso(d);
+}
+function lrCsv(name, head, rows) {
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [head, ...rows].map((r) => r.map(esc).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8;" }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+export function LeadReport() {
+  const [period, setPeriod] = useState("month");
+  const [cf, setCf] = useState("");
+  const [ct, setCt] = useState("");
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [setup, setSetup] = useState(false);
+  /* filters */
+  const [q, setQ] = useState("");
+  const [kw, setKw] = useState("");
+  const [stages, setStages] = useState([]);
+  const [services, setServices] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [sources, setSources] = useState([]);
+  const [camps, setCamps] = useState([]);
+  const [pipe, setPipe] = useState("");
+  const [group, setGroup] = useState("month");
+  const [asPct, setAsPct] = useState(false);
+  const [page, setPage] = useState(1);
+
+  const R = lrRange(period, cf, ct);
+
+  async function load() {
+    if (R.from > R.to) { setErr("From date is after To date."); return; }
+    setBusy(true); setErr(""); setSetup(false);
+    try {
+      const r = await fetch("/api/crm/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ report: true, from: R.from, to: R.to }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErr(j.error || "Could not load leads from CRM"); setSetup(Boolean(j.needsSetup)); return; }
+      const D = j.dict || {};
+      const at = (k, i) => (i >= 0 ? D[k]?.[i] || "" : "");
+      const rows = (j.rows || []).map((a) => ({
+        id: a[0], created: a[1], day: String(a[1]).slice(0, 10), name: a[2], phone: a[3], email: a[4],
+        stage: at("stage", a[5]) || "No stage", staff: at("staff", a[6]) || "Unassigned", service: at("service", a[7]),
+        source: at("source", a[8]), campaign: at("campaign", a[9]), pipeline: at("pipeline", a[10]),
+        deal: Number(a[11]) || 0, updated: a[12], city: a[13], state: at("state", a[14]),
+      }));
+      setData({ ...j, rows });
+    } catch { setErr("Could not reach the server"); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { if (period !== "custom") load(); }, [period]);
+  useEffect(() => { setPage(1); }, [q, kw, stages, services, staff, sources, camps, pipe, data]);
+
+  const v = useMemo(() => {
+    if (!data) return null;
+    const all = data.rows;
+    const lostSet = new Set((data.lostValues || []).map((x) => String(x).toLowerCase()));
+    const isWon = (s) => /\bwon\b|converted/i.test(s);
+    const isLost = (s) => lostSet.has(String(s).toLowerCase()) || /lost|not interested|junk|reject/i.test(s);
+    const uniq = (k) => { const m = new Map(); all.forEach((r) => { const x = r[k]; if (x) m.set(x, (m.get(x) || 0) + 1); }); return [...m.entries()].sort((a, b) => b[1] - a[1]); };
+    const t = q.trim().toLowerCase();
+    const tDigits = t.replace(/\D/g, "");
+    const base = all.filter((r) => {
+      if (pipe && r.pipeline !== pipe) return false;
+      if (services.length && !services.includes(r.service)) return false;
+      if (staff.length && !staff.includes(r.staff)) return false;
+      if (sources.length && !sources.includes(r.source)) return false;
+      if (camps.length && !camps.includes(r.campaign)) return false;
+      if (kw.trim() && !lrKeyword(`${r.service} ${r.campaign}`, kw)) return false;
+      if (t) {
+        const hay = `${r.name} ${r.email} ${r.id} ${r.city} ${r.state}`.toLowerCase();
+        const ph = String(r.phone || "").replace(/\D/g, "");
+        if (!hay.includes(t) && !(tDigits.length >= 3 && ph.includes(tDigits))) return false;
+      }
+      return true;
+    });
+    /* Stage boxes — stage filter ke bina (taaki baaki stages ki ginti bhi dikhe) */
+    const cnt = new Map(); const val = new Map();
+    base.forEach((r) => { cnt.set(r.stage, (cnt.get(r.stage) || 0) + 1); val.set(r.stage, (val.get(r.stage) || 0) + r.deal); });
+    const order = [];
+    const seen = new Set();
+    (data.stages || []).filter((s) => !pipe || s.pipeline === pipe).forEach((s) => { if (!seen.has(s.label)) { seen.add(s.label); order.push(s.label); } });
+    [...cnt.keys()].sort((a, b) => cnt.get(b) - cnt.get(a)).forEach((k) => { if (!seen.has(k)) { seen.add(k); order.push(k); } });
+    const stageCards = order.map((k) => ({ k, n: cnt.get(k) || 0, val: val.get(k) || 0, tone: lrStageTone(k) }))
+      .filter((x) => x.n > 0 || (data.stages || []).some((s) => s.label === x.k));
+    const list = stages.length ? base.filter((r) => stages.includes(r.stage)) : base;
+    const won = list.filter((r) => isWon(r.stage));
+    const lost = list.filter((r) => isLost(r.stage));
+    const wonVal = won.reduce((a, r) => a + r.deal, 0);
+
+    /* Breakdown: rows = group, columns = stages */
+    const keyOf = (r) => {
+      if (group === "month") return r.day.slice(0, 7);
+      if (group === "week") return lrWeek(r.day);
+      if (group === "day") return r.day;
+      return r[group] || (group === "staff" ? "Unassigned" : "—");
+    };
+    const gm = new Map();
+    list.forEach((r) => {
+      const k = keyOf(r);
+      const g = gm.get(k) || { k, total: 0, by: {} };
+      g.total += 1; g.by[r.stage] = (g.by[r.stage] || 0) + 1;
+      gm.set(k, g);
+    });
+    const timeGroup = ["month", "week", "day"].includes(group);
+    const groups = [...gm.values()].sort((a, b) => (timeGroup ? String(b.k).localeCompare(String(a.k)) : b.total - a.total));
+    const cols = stageCards.filter((x) => list.some((r) => r.stage === x.k)).map((x) => x.k);
+    const totBy = {}; list.forEach((r) => { totBy[r.stage] = (totBy[r.stage] || 0) + 1; });
+    const label = (k) => {
+      if (group === "month") { const [y, m] = String(k).split("-").map(Number); return `${MONS[m - 1]} ${y}`; }
+      if (group === "week") return `Week of ${lrShort(k)}`;
+      if (group === "day") return lrShort(k);
+      return k;
+    };
+    return {
+      all, base, list, stageCards, won, lost, wonVal, groups, cols, totBy, label,
+      opts: { service: uniq("service"), staff: uniq("staff"), source: uniq("source"), campaign: uniq("campaign"), pipeline: uniq("pipeline") },
+    };
+  }, [data, q, kw, stages, services, staff, sources, camps, pipe, group]);
+
+  const toggleStage = (k) => setStages((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
+  const anyFilter = q || kw || stages.length || services.length || staff.length || sources.length || camps.length || pipe;
+  const clearAll = () => { setQ(""); setKw(""); setStages([]); setServices([]); setStaff([]); setSources([]); setCamps([]); setPipe(""); };
+  const opt = (arr) => arr.map(([k, n]) => ({ id: k, label: `${k} (${num(n)})` }));
+  const pages = v ? Math.max(1, Math.ceil(v.list.length / LR_PER)) : 1;
+  const cur = Math.min(page, pages);
+  const shown = v ? v.list.slice((cur - 1) * LR_PER, cur * LR_PER) : [];
+  const tag = `${R.from}-to-${R.to}`;
+
+  function exportLeads() {
+    lrCsv(`vakilkaro-lead-report-${tag}.csv`,
+      ["Lead ID", "Created", "Name", "Phone", "Email", "Service", "Stage", "Pipeline", "Staff", "Source", "Campaign", "Deal value", "City", "State", "Last updated"],
+      v.list.map((r) => [r.id, r.created, r.name, r.phone, r.email, r.service, r.stage, r.pipeline, r.staff, r.source, r.campaign, r.deal || "", r.city, r.state, r.updated]));
+  }
+  function exportBreakdown() {
+    const g = LR_GROUPS.find((x) => x.key === group)?.label || "Group";
+    lrCsv(`vakilkaro-lead-stages-by-${group}-${tag}.csv`, [g, "Total", ...v.cols],
+      [...v.groups.map((x) => [v.label(x.k), x.total, ...v.cols.map((c) => x.by[c] || 0)]), ["Total", v.list.length, ...v.cols.map((c) => v.totBy[c] || 0)]]);
+  }
+  const cellTxt = (n, total) => (!n ? <span className="mut">–</span> : asPct ? `${pct(n, total).toFixed(0)}%` : num(n));
+  const inputStyle = { flex: 1, minWidth: 0, border: 0, outline: "none", background: "transparent", font: "600 13px var(--font)", color: "#1B2333" };
+  const xBtn = (fn, lbl) => <button type="button" onClick={fn} aria-label={lbl} style={{ border: 0, background: "none", cursor: "pointer", color: "#959CAE", padding: 0 }}><i className="fa-solid fa-xmark" /></button>;
+
+  return (
+    <div className="st">
+      <div className="lf-head">
+        <div className="pg-desc" style={{ marginTop: 0 }}>Every lead created in the CRM in the chosen dates, and the stage it is in right now. Click a stage box to see only those leads. Search a service keyword like “TM” to see all related leads.</div>
+        <div className="lf-acts">
+          {data?.at ? <span className="lf-at"><i className="fa-solid fa-rotate" /> Loaded {new Date(data.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span> : null}
+          <button type="button" className="btn btn-gold" disabled={busy} onClick={load}>
+            <i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-rotate"}`} /> {busy ? "Loading from CRM..." : "Refresh from CRM"}
+          </button>
+        </div>
+      </div>
+
+      <div className="st-filters">
+        <label className="st-sel"><i className="fa-regular fa-calendar" />
+          <select value={period} onChange={(e) => { const k = e.target.value; if (k === "custom" && !cf) { const r0 = lrRange("month"); setCf(r0.from); setCt(r0.to); } setPeriod(k); }} aria-label="Lead created in">
+            {LR_PERIODS.map((p) => <option key={p.key} value={p.key}>{p.key === "custom" ? p.label : `Created: ${p.label}`}</option>)}
+          </select><i className="fa-solid fa-chevron-down st-cv" />
+        </label>
+        {period === "custom" ? (
+          <>
+            <label className="st-sel" style={{ paddingRight: 12 }}><span style={{ fontSize: 12, color: "#646B7E", fontWeight: 600 }}>From</span>
+              <input type="date" value={cf} max={ct || undefined} onChange={(e) => setCf(e.target.value)} aria-label="From date" style={inputStyle} /></label>
+            <label className="st-sel" style={{ paddingRight: 12 }}><span style={{ fontSize: 12, color: "#646B7E", fontWeight: 600 }}>To</span>
+              <input type="date" value={ct} min={cf || undefined} onChange={(e) => setCt(e.target.value)} aria-label="To date" style={inputStyle} /></label>
+            <button type="button" className="btn btn-gold" disabled={busy || !cf || !ct} onClick={load}><i className="fa-solid fa-check" /> Apply</button>
+          </>
+        ) : <span className="lf-at">{lrShort(R.from)}{R.from !== R.to ? ` – ${lrShort(R.to)}` : ""}</span>}
+      </div>
+
+      {data ? (
+        <div className="st-filters">
+          <label className={`st-sel wide${q ? " on" : ""}`} style={{ paddingRight: 10 }}>
+            <i className="fa-solid fa-magnifying-glass" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, phone, email or lead ID" aria-label="Search leads" style={inputStyle} />
+            {q ? xBtn(() => setQ(""), "Clear search") : null}
+          </label>
+          <label className={`st-sel wide${kw ? " on" : ""}`} style={{ paddingRight: 10 }}>
+            <i className="fa-solid fa-briefcase" />
+            <input value={kw} onChange={(e) => setKw(e.target.value)} placeholder="Service keyword — e.g. TM, GST, NGO" aria-label="Service keyword" style={inputStyle} />
+            {kw ? xBtn(() => setKw(""), "Clear keyword") : null}
+          </label>
+          <MultiPick icon="fa-flag" noun="stages" allLabel="All stages" options={(v?.stageCards || []).map((x) => ({ id: x.k, label: `${x.k} (${num(x.n)})` }))} value={stages} onChange={setStages} />
+          <MultiPick icon="fa-scale-balanced" noun="services" allLabel="All services" options={opt(v?.opts.service || [])} value={services} onChange={setServices} />
+          <MultiPick icon="fa-user-tie" noun="staff" allLabel="All staff" options={opt(v?.opts.staff || [])} value={staff} onChange={setStaff} />
+          <MultiPick icon="fa-signal" noun="sources" allLabel="All sources" options={opt(v?.opts.source || [])} value={sources} onChange={setSources} />
+          <MultiPick icon="fa-bullhorn" noun="campaigns" allLabel="All campaigns" options={opt(v?.opts.campaign || [])} value={camps} onChange={setCamps} />
+          {(v?.opts.pipeline || []).length > 1 ? (
+            <label className={`st-sel${pipe ? " on" : ""}`}><i className="fa-solid fa-diagram-project" />
+              <select value={pipe} onChange={(e) => { setPipe(e.target.value); setStages([]); }} aria-label="Pipeline">
+                <option value="">All pipelines</option>
+                {v.opts.pipeline.map(([k, n]) => <option key={k} value={k}>{k} ({num(n)})</option>)}
+              </select><i className="fa-solid fa-chevron-down st-cv" />
+            </label>
+          ) : null}
+          {anyFilter ? <button type="button" className="ph-clear" onClick={clearAll}>Clear all</button> : null}
+        </div>
+      ) : null}
+
+      {err ? <div className="lf-err"><i className="fa-solid fa-triangle-exclamation" /> {err}{setup ? " Add the CRM_DB_* values in your environment settings, then try again." : ""}</div> : null}
+      {data?.truncated ? <div className="lf-err warn"><i className="fa-solid fa-circle-info" /> This range has {num(data.total)} leads — showing the newest {num(data.rows.length)}. Pick a shorter date range to see all of them.</div> : null}
+
+      {!v ? (
+        <div className="card"><div className="lf-empty"><i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-chart-column"}`} /><b>{busy ? "Reading leads from the CRM..." : "No data yet"}</b><span>{busy ? "This can take a few seconds for a big date range." : "Pick the dates and press “Refresh from CRM”."}</span></div></div>
+      ) : (
+        <>
+          <div className="lf-stats">
+            <div><span>Leads{anyFilter ? " (filtered)" : ""}</span><b>{num(v.list.length)}</b><em>{anyFilter ? `of ${num(v.all.length)} created in these dates` : `created ${lrShort(R.from)}${R.from !== R.to ? ` – ${lrShort(R.to)}` : ""}`}</em></div>
+            <div><span>Won</span><b style={{ color: "#1E8A54" }}>{num(v.won.length)}</b><em>{pct(v.won.length, v.list.length).toFixed(1)}% conversion{v.wonVal ? ` · ${inr(v.wonVal)}` : ""}</em></div>
+            <div><span>Lost / not interested</span><b style={{ color: "#C0392B" }}>{num(v.lost.length)}</b><em>{pct(v.lost.length, v.list.length).toFixed(1)}% of these leads</em></div>
+            <div><span>Still open</span><b>{num(v.list.length - v.won.length - v.lost.length)}</b><em>{pct(v.list.length - v.won.length - v.lost.length, v.list.length).toFixed(1)}% — being worked on</em></div>
+          </div>
+
+          {/* ---- stage boxes ---- */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
+            {v.stageCards.map((x) => {
+              const on = stages.includes(x.k);
+              return (
+                <button type="button" key={x.k} onClick={() => toggleStage(x.k)} aria-pressed={on} className="card"
+                  style={{ textAlign: "left", cursor: "pointer", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 5, border: on ? `2px solid ${x.tone.c}` : "1px solid var(--pm-line,#E3E6EF)", background: on ? x.tone.bg : "#fff", opacity: stages.length && !on ? 0.6 : 1, font: "inherit", color: "inherit" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: "#1B2333", minWidth: 0 }}>
+                    <i style={{ width: 9, height: 9, borderRadius: 99, background: x.tone.c, flex: "0 0 auto" }} />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={x.k}>{x.k}</span>
+                    {on ? <i className="fa-solid fa-check" style={{ marginLeft: "auto", color: x.tone.c, fontSize: 11 }} /> : null}
+                  </span>
+                  <b style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.02em", fontVariantNumeric: "tabular-nums" }}>{num(x.n)}</b>
+                  <span style={{ height: 5, borderRadius: 99, background: "#EEF0F5", overflow: "hidden" }}><i style={{ display: "block", height: "100%", width: `${pct(x.n, v.base.length)}%`, background: x.tone.c, borderRadius: 99 }} /></span>
+                  <small style={{ fontSize: 11.5, color: "#5B6478" }}>{pct(x.n, v.base.length).toFixed(1)}%{x.val ? ` · ${inr(x.val)}` : ""}</small>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ---- breakdown ---- */}
+          <section className="card st-card">
+            <div className="st-card-h">
+              <span className="lf-form-ic"><i className="fa-solid fa-table-cells" /></span>
+              <div style={{ flex: 1, minWidth: 0 }}><b>Where these leads are now</b><small>Leads created in each {LR_GROUPS.find((x) => x.key === group)?.label.toLowerCase()} and the stage they are in today</small></div>
+              <label className="st-sel"><i className="fa-solid fa-layer-group" />
+                <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Break down by">
+                  {LR_GROUPS.map((g) => <option key={g.key} value={g.key}>By {g.label.toLowerCase()}</option>)}
+                </select><i className="fa-solid fa-chevron-down st-cv" />
+              </label>
+              <label className="st-check"><input type="checkbox" checked={asPct} onChange={(e) => setAsPct(e.target.checked)} /> Show %</label>
+              <button type="button" className="btn btn-ghost" onClick={exportBreakdown} disabled={!v.list.length}><i className="fa-solid fa-file-csv" /> CSV</button>
+            </div>
+            {v.list.length ? (
+              <div className="tbl-scroll" style={{ maxHeight: 460 }}>
+                <table className="mod-table st-t">
+                  <thead><tr><th>{LR_GROUPS.find((x) => x.key === group)?.label}</th><th className="ta-r">Total</th>{v.cols.map((c) => <th key={c} className="ta-r" style={{ color: lrStageTone(c).c }}>{c}</th>)}</tr></thead>
+                  <tbody>
+                    {v.groups.map((g) => (
+                      <tr key={g.k}>
+                        <td><b style={{ display: "inline-block", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", verticalAlign: "bottom" }} title={v.label(g.k)}>{v.label(g.k)}</b></td>
+                        <td className="ta-r"><b>{num(g.total)}</b></td>
+                        {v.cols.map((c) => <td key={c} className="ta-r">{cellTxt(g.by[c], g.total)}</td>)}
+                      </tr>
+                    ))}
+                    <tr style={{ background: "#F4F5FA" }}>
+                      <td style={{ background: "#F4F5FA" }}><b>Total</b></td>
+                      <td className="ta-r" style={{ background: "#F4F5FA" }}><b>{num(v.list.length)}</b></td>
+                      {v.cols.map((c) => <td key={c} className="ta-r" style={{ background: "#F4F5FA" }}><b>{cellTxt(v.totBy[c], v.list.length)}</b></td>)}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : <div className="lf-empty"><i className="fa-solid fa-magnifying-glass" /><b>No leads match</b><span>Change or clear the filters.</span></div>}
+          </section>
+
+          {/* ---- leads ---- */}
+          <section className="card st-card">
+            <div className="st-card-h">
+              <span className="lf-form-ic"><i className="fa-solid fa-list" /></span>
+              <div style={{ flex: 1, minWidth: 0 }}><b>Leads</b><small>{num(v.list.length)} lead{v.list.length === 1 ? "" : "s"}{stages.length ? ` · ${stages.join(", ")}` : ""}{kw ? ` · “${kw}”` : ""} · newest first</small></div>
+              <button type="button" className="btn btn-gold" onClick={exportLeads} disabled={!v.list.length}><i className="fa-solid fa-file-arrow-down" /> Export {num(v.list.length)} leads</button>
+            </div>
+            {v.list.length ? (
+              <>
+                <div className="tbl-scroll">
+                  <table className="mod-table st-t">
+                    <thead><tr><th>Lead</th><th>Created</th><th>Phone</th><th>Service</th><th>Stage</th><th>Staff</th><th>Source / campaign</th><th className="ta-r">Deal</th></tr></thead>
+                    <tbody>
+                      {shown.map((r) => {
+                        const tone = lrStageTone(r.stage);
+                        return (
+                          <tr key={r.id}>
+                            <td><b>{r.name || "—"}</b><small className="mut" style={{ display: "block" }}>#{r.id}{r.city || r.state ? ` · ${[r.city, r.state].filter(Boolean).join(", ")}` : ""}</small></td>
+                            <td>{lrDate(r.created)}</td>
+                            <td>{r.phone || <span className="mut">—</span>}{r.email ? <small className="mut" style={{ display: "block" }}>{r.email}</small> : null}</td>
+                            <td style={{ whiteSpace: "normal", minWidth: 160 }}>{r.service || <span className="mut">—</span>}</td>
+                            <td><span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 700, color: tone.c, background: tone.bg, borderRadius: 7, padding: "2px 8px" }}>{r.stage}</span>{r.pipeline ? <small className="mut" style={{ display: "block" }}>{r.pipeline}</small> : null}</td>
+                            <td>{r.staff}</td>
+                            <td style={{ whiteSpace: "normal", minWidth: 160 }}>{r.source || <span className="mut">—</span>}{r.campaign ? <small className="mut" style={{ display: "block" }}>{r.campaign}</small> : null}</td>
+                            <td className="ta-r">{r.deal ? inr(r.deal) : <span className="mut">—</span>}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ padding: "0 18px 14px" }}><TablePager page={cur} pages={pages} total={v.list.length} onPage={setPage} perPage={LR_PER} /></div>
+              </>
+            ) : <div className="lf-empty"><i className="fa-solid fa-magnifying-glass" /><b>No leads match</b><span>Change or clear the filters.</span></div>}
+          </section>
+
+          <p className="st-note"><i className="fa-solid fa-circle-info" /> Dates are when the lead was created in the CRM; the stage is where it is right now. Service keyword looks at the service and campaign — “TM” also finds “Trademark”. Separate keywords with a comma to find more than one (e.g. TM, GST).</p>
+        </>
+      )}
     </div>
   );
 }

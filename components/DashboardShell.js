@@ -25,6 +25,7 @@ const MARKETING_NAV = [
   { section: "System", items: [
     { key: "comparison", label: "Comparison", icon: "fa-code-compare", href: "/comparison" },
     { key: "analytics", label: "Reports", icon: "fa-file-invoice", href: "/reports" },
+    { key: "lead-report", label: "Lead Report", icon: "fa-chart-column", href: "/lead-report", perm: "analytics" },
     { key: "settings", label: "Settings", icon: "fa-gear", href: "/settings" },
   ]},
 ];
