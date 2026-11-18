@@ -11,7 +11,7 @@
      · 24 ghante ka chart + table (leads, chats, kharch, cost per lead)
    ============================================================ */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { readRows } from "../lib/marketing-local";
 
 const CACHE = "vk_meta_hours";
@@ -389,6 +389,206 @@ export function ByPagesTab({ tab }) {
           ) : null}
 
           <p className="st-note"><i className="fa-solid fa-circle-info" /> The page is the Facebook Page each ad runs from. Leads come from Meta for the chosen period; one campaign can run ads from more than one page.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   ByAgeTab — Campaigns → "By Age"
+   Kis umar ke log leads de rahe hain — har campaign aur ad set ka.
+   Keyword search (jaise "TM") → naam me wo shabd wale saare campaigns
+   + ad sets, unki kul leads aur har umar ki leads.
+   ============================================================ */
+const ACACHE = "vk_meta_ages";
+const AGES = ["18-24", "25-34", "35-44", "45-54", "55-64", "65+"];
+const AGE_COLORS = { "18-24": "#7FA6F5", "25-34": "#3B6FE0", "35-44": "#1E8A54", "45-54": "#D9970F", "55-64": "#E2621B", "65+": "#7C3AED" };
+export function ByAgeTab({ tab }) {
+  const [period, setPeriod] = useState("7");
+  const [camps, setCamps] = useState([]);
+  const [running, setRunning] = useState(true);
+  const [q, setQ] = useState("");
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [openC, setOpenC] = useState({});      /* kaun se campaign khule (ad sets dikhein) */
+  const [local, setLocal] = useState({ camps: [], accounts: [] });
+
+  useEffect(() => {
+    const load = () => setLocal({ camps: readRows("campaigns__live-ads"), accounts: readRows("ad-accounts__accounts") });
+    load();
+    window.addEventListener("vk-marketing-updated", load);
+    return () => window.removeEventListener("vk-marketing-updated", load);
+  }, []);
+
+  async function fetchData(force = false) {
+    const R = rangeOf(period);
+    let cache = {}; try { cache = JSON.parse(localStorage.getItem(ACACHE) || "{}"); } catch { cache = {}; }
+    const hit = cache[period];
+    if (!force && hit && hit.since === R.since && hit.until === R.until && Date.now() - Date.parse(hit.at || 0) < 30 * 60000) { setData(hit); return; }
+    const ids = [...new Set(local.accounts.filter((a) => a.platform === "Meta").map((a) => String(a.accountId || "").trim()).filter((x) => /^act_\d+$/.test(x)))];
+    if (!ids.length) { setErr("Connect a Meta account in Ad Accounts first."); return; }
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch("/api/meta/hour-of-day", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountIds: ids, ...R, by: "age" }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) setErr(j.error || "Could not load age-wise data from Meta");
+      else { setData(j); try { localStorage.setItem(ACACHE, JSON.stringify({ ...cache, [period]: j })); } catch { /* */ } }
+    } catch { setErr("Could not reach the server"); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { if (local.accounts.length) fetchData(); }, [period, local.accounts.length]);
+
+  const activeIds = useMemo(() => new Set(local.camps.filter((c) => String(c.status) === "Active" && c.extId).map((c) => String(c.extId))), [local.camps]);
+
+  const v = useMemo(() => {
+    if (!data) return null;
+    const rows = (data.rows || []).filter((r) => !running || activeIds.has(r.campaignId) || !activeIds.size);
+    const campList = [...new Map(rows.map((r) => [r.campaignId, r.campaign])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    let mine = camps.length ? rows.filter((r) => camps.includes(r.campaignId)) : rows;
+    /* Keyword — campaign ya ad set ke naam me (jaise "TM") */
+    const t = q.trim().toLowerCase();
+    if (t) mine = mine.filter((r) => `${r.campaign} ${r.adset}`.toLowerCase().includes(t));
+    const blank = () => ({ leads: 0, chats: 0, spend: 0, ages: {} });
+    const add = (o, r) => {
+      o.leads += r.leads; o.chats += r.chats; o.spend += r.spend;
+      const a = o.ages[r.age] || (o.ages[r.age] = { leads: 0, chats: 0, spend: 0 });
+      a.leads += r.leads; a.chats += r.chats; a.spend += r.spend;
+    };
+    const tot = blank();
+    const cmap = new Map();
+    mine.forEach((r) => {
+      add(tot, r);
+      const c = cmap.get(r.campaignId) || { id: r.campaignId, name: r.campaign, ...blank(), sets: new Map() };
+      add(c, r);
+      const st = c.sets.get(r.adsetId) || { id: r.adsetId, name: r.adset, ...blank() };
+      add(st, r);
+      c.sets.set(r.adsetId, st);
+      cmap.set(r.campaignId, c);
+    });
+    const list = [...cmap.values()].map((c) => ({ ...c, sets: [...c.sets.values()].sort((a, b) => b.leads - a.leads || b.spend - a.spend) }))
+      .sort((a, b) => b.leads - a.leads || b.spend - a.spend);
+    const ageKeys = [...new Set([...AGES, ...Object.keys(tot.ages)])].filter((k) => AGES.includes(k) || tot.ages[k]);
+    const ages = ageKeys.map((k) => ({ k, ...(tot.ages[k] || { leads: 0, chats: 0, spend: 0 }) }));
+    const top = tot.leads ? ages.reduce((a, x) => (x.leads > a.leads ? x : a)) : null;
+    const withL = ages.filter((x) => x.leads >= 3);
+    const cheapest = withL.length ? withL.reduce((a, x) => (x.spend / x.leads < a.spend / a.leads ? x : a)) : null;
+    const setCount = list.reduce((n, c) => n + c.sets.length, 0);
+    return { campList, list, tot, ages, ageKeys, top, cheapest, setCount };
+  }, [data, camps, running, activeIds, q]);
+
+  const R = rangeOf(period);
+  const maxA = Math.max(1, ...(v?.ages || []).map((x) => x.leads));
+  const cell = (o, k) => { const n = o.ages[k]?.leads || 0; return n ? num(n) : <span className="mut">–</span>; };
+
+  return (
+    <div className="st">
+      <div className="lf-head">
+        <div className="pg-desc" style={{ marginTop: 0 }}>{tab.description}</div>
+        <div className="lf-acts">
+          {data?.at ? <span className="lf-at"><i className="fa-solid fa-rotate" /> Loaded {new Date(data.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span> : null}
+          <button type="button" className="btn btn-gold" disabled={busy} onClick={() => fetchData(true)}>
+            <i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-rotate"}`} /> {busy ? "Loading from Meta..." : "Refresh from Meta"}
+          </button>
+        </div>
+      </div>
+
+      <div className="st-filters">
+        <label className="st-sel"><i className="fa-regular fa-calendar" />
+          <select value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Period">
+            {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select><i className="fa-solid fa-chevron-down st-cv" />
+        </label>
+        <label className={`st-sel wide${q ? " on" : ""}`} style={{ paddingRight: 10 }}>
+          <i className="fa-solid fa-magnifying-glass" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search keyword — e.g. TM, NGO, MFC" aria-label="Keyword"
+            style={{ flex: 1, minWidth: 0, border: 0, outline: "none", background: "transparent", font: "600 13px var(--font)", color: "#1B2333" }} />
+          {q ? <button type="button" onClick={() => setQ("")} aria-label="Clear search" style={{ border: 0, background: "none", cursor: "pointer", color: "#959CAE", padding: 0 }}><i className="fa-solid fa-xmark" /></button> : null}
+        </label>
+        <MultiPick
+          icon="fa-bullhorn" noun="campaigns" allLabel={`All ${running ? "running " : ""}campaigns`}
+          options={(v?.campList || []).map(([id, name]) => ({ id, label: name }))}
+          value={camps} onChange={setCamps}
+        />
+        <label className="st-check"><input type="checkbox" checked={running} onChange={(e) => setRunning(e.target.checked)} /> Running campaigns only</label>
+        {camps.length || q ? <button type="button" className="ph-clear" onClick={() => { setCamps([]); setQ(""); }}>Clear</button> : null}
+      </div>
+
+      {err ? <div className="lf-err"><i className="fa-solid fa-triangle-exclamation" /> {err}</div> : null}
+      {data?.errors?.length ? <div className="lf-err warn"><i className="fa-solid fa-circle-info" /> {data.errors.map((e) => e.message).join(" · ")}</div> : null}
+
+      {!v ? (
+        <div className="card"><div className="lf-empty"><i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-users"}`} /><b>{busy ? "Reading age-wise data from Meta..." : "No data yet"}</b><span>Press "Refresh from Meta".</span></div></div>
+      ) : (
+        <>
+          <div className="lf-stats">
+            <div><span>Form leads{q ? ` · “${q}”` : ""}</span><b>{num(v.tot.leads)}</b><em>{v.list.length} campaigns · {v.setCount} ad sets</em></div>
+            <div><span>Spend</span><b>{inr(v.tot.spend)}</b><em>{v.tot.leads ? `${inr(v.tot.spend / v.tot.leads, 2)} per lead` : "—"} · {num(v.tot.chats)} chats</em></div>
+            <div><span>Top age group</span><b className="st-txt">{v.top ? v.top.k : "—"}</b><em>{v.top ? `${num(v.top.leads)} leads · ${pct(v.top.leads, v.tot.leads).toFixed(0)}%` : ""}</em></div>
+            <div><span>Cheapest age group</span><b className="st-txt">{v.cheapest ? v.cheapest.k : "—"}</b><em>{v.cheapest ? `${inr(v.cheapest.spend / v.cheapest.leads, 2)} per lead` : "needs 3+ leads"}</em></div>
+          </div>
+
+          {/* ---- age groups ---- */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+            {v.ages.map((x) => (
+              <div key={x.k} className="card" style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6, outline: v.top && v.top.k === x.k ? "2px solid #E8A81C" : "none" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <b style={{ fontSize: 13 }}><i className="fa-solid fa-user" style={{ color: AGE_COLORS[x.k] || "#64748B", marginRight: 6 }} />{x.k}</b>
+                  {v.top && v.top.k === x.k ? <span className="mx-tag">Top</span> : null}
+                </div>
+                <b style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-.02em", fontVariantNumeric: "tabular-nums" }}>{num(x.leads)}</b>
+                <span style={{ height: 6, borderRadius: 99, background: "#EEF0F5", overflow: "hidden" }}><i style={{ display: "block", height: "100%", width: `${(x.leads / maxA) * 100}%`, background: AGE_COLORS[x.k] || "#64748B", borderRadius: 99 }} /></span>
+                <small style={{ fontSize: 11.5, color: "#5B6478" }}>{pct(x.leads, v.tot.leads).toFixed(0)}% · {x.leads ? `${inr(x.spend / x.leads, 2)}/lead` : "—"}</small>
+              </div>
+            ))}
+          </div>
+
+          {/* ---- campaigns × ages ---- */}
+          <section className="card st-card">
+            <div className="st-card-h">
+              <span className="lf-form-ic"><i className="fa-solid fa-users" /></span>
+              <div><b>Campaigns &amp; ad sets by age</b><small>{q ? `Matching “${q}”` : camps.length ? `${camps.length} campaigns` : "All campaigns"} · click a campaign to see its ad sets</small></div>
+            </div>
+            {v.list.length ? (
+              <div className="tbl-scroll">
+                <table className="mod-table st-t">
+                  <thead><tr><th>Campaign / ad set</th>{v.ageKeys.map((k) => <th key={k} className="ta-r">{k}</th>)}<th className="ta-r">Total leads</th><th className="ta-r">Spend</th><th className="ta-r">Cost / lead</th></tr></thead>
+                  <tbody>
+                    {v.list.map((c) => (
+                      <Fragment key={c.id}>
+                        <tr onClick={() => setOpenC((o) => ({ ...o, [c.id]: !o[c.id] }))} style={{ cursor: "pointer", background: openC[c.id] ? "#FFFBF0" : undefined }}>
+                          <td style={openC[c.id] ? { background: "#FFFBF0" } : undefined}><b><i className={`fa-solid fa-chevron-${openC[c.id] ? "down" : "right"}`} style={{ fontSize: 10, color: "#959CAE", marginRight: 8 }} />{c.name}</b><small className="mut" style={{ display: "block", marginLeft: 18 }}>{c.sets.length} ad set{c.sets.length === 1 ? "" : "s"}</small></td>
+                          {v.ageKeys.map((k) => <td key={k} className="ta-r">{cell(c, k)}</td>)}
+                          <td className="ta-r"><b>{num(c.leads)}</b></td>
+                          <td className="ta-r">{inr(c.spend, 2)}</td>
+                          <td className="ta-r">{c.leads ? inr(c.spend / c.leads, 2) : <span className="mut">—</span>}</td>
+                        </tr>
+                        {openC[c.id] ? c.sets.map((st) => (
+                          <tr key={`${c.id}-${st.id}`} style={{ background: "#FAFBFD" }}>
+                            <td style={{ paddingLeft: 34, background: "#FAFBFD" }}><i className="fa-solid fa-layer-group" style={{ fontSize: 11, color: "#959CAE", marginRight: 6 }} />{st.name}</td>
+                            {v.ageKeys.map((k) => <td key={k} className="ta-r">{cell(st, k)}</td>)}
+                            <td className="ta-r"><b>{num(st.leads)}</b></td>
+                            <td className="ta-r">{inr(st.spend, 2)}</td>
+                            <td className="ta-r">{st.leads ? inr(st.spend / st.leads, 2) : <span className="mut">—</span>}</td>
+                          </tr>
+                        )) : null}
+                      </Fragment>
+                    ))}
+                    <tr style={{ background: "#F4F5FA" }}>
+                      <td style={{ background: "#F4F5FA" }}><b>Total</b></td>
+                      {v.ageKeys.map((k) => <td key={k} className="ta-r"><b>{num(v.tot.ages[k]?.leads || 0)}</b></td>)}
+                      <td className="ta-r"><b>{num(v.tot.leads)}</b></td>
+                      <td className="ta-r"><b>{inr(v.tot.spend, 2)}</b></td>
+                      <td className="ta-r"><b>{v.tot.leads ? inr(v.tot.spend / v.tot.leads, 2) : "—"}</b></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : <div className="lf-empty"><i className="fa-solid fa-magnifying-glass" /><b>Nothing found</b><span>{q ? `No campaign or ad set has “${q}” in its name in this period.` : "No ads ran in this period."}</span></div>}
+          </section>
+
+          <p className="st-note"><i className="fa-solid fa-circle-info" /> Age comes from Meta (the age of the people who filled the form / started the chat). Search looks at campaign and ad set names.</p>
         </>
       )}
     </div>
