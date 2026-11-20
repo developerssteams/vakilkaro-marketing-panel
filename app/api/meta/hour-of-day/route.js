@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "../../../../lib/session";
 import { metaConfig } from "../../../../lib/platform-config";
-import { fetchHourOfDay, fetchPageBreakdown, fetchAgeBreakdown } from "../../../../lib/meta-api";
+import { fetchHourOfDay, fetchPageBreakdown, fetchAgeBreakdown, fetchDailyBreakdown } from "../../../../lib/meta-api";
 
 /* POST { accountIds, since, until } → Campaigns → "By Time":
    har campaign ki din ke har ghante ki leads / chats / kharch
    POST { ..., by: "page" } → Campaigns → "By Pages":
    kis Facebook Page ke ads se kitni leads / chats / kharch
    POST { ..., by: "age" } → Campaigns → "By Age":
-   har campaign + ad set ki umar-wise leads / chats / kharch */
+   har campaign + ad set ki umar-wise leads / chats / kharch
+   POST { ..., by: "daily" } → Campaigns → "By Lead Quantity":
+   har campaign + ad set ki din-wise leads / chats / kharch */
 export async function POST(request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -21,6 +23,7 @@ export async function POST(request) {
   try {
     const r = d.by === "page" ? await fetchPageBreakdown(ids, d.since, d.until)
       : d.by === "age" ? await fetchAgeBreakdown(ids, d.since, d.until)
+      : d.by === "daily" ? await fetchDailyBreakdown(ids, d.since, d.until)
       : await fetchHourOfDay(ids, d.since, d.until);
     return NextResponse.json({ ok: true, ...r, since: d.since, until: d.until, at: new Date().toISOString() });
   } catch (e) {

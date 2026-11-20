@@ -1073,3 +1073,434 @@ export function LeadReport() {
     </div>
   );
 }
+
+/* ============================================================
+   BY LEAD QUANTITY (Campaigns → "By Lead Quantity")
+
+   Kisi bhi keyword (jaise "TM") ki leads din-ba-din — Meta ke ad set
+   ke din-wise data se. Comma se kai keyword do (TM, GST, NGO) to graph
+   me har keyword ki alag line — seedha tulna.
+     · Filter: Today / Yesterday / Last 7 days / This month / Last month /
+       Last 30 / Last 90 / Custom · campaigns (kai ek saath) · sirf chal rahe
+     · Graph: leads / chats / leads + chats / kharch / cost per lead
+     · Keyword-wise tally · campaign + ad set table · din-wise table + CSV
+   ============================================================ */
+const DCACHE = "vk_meta_daily";
+const LQ_PERIODS = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "7", label: "Last 7 days" },
+  { key: "month", label: "This month" },
+  { key: "lastmonth", label: "Last month" },
+  { key: "30", label: "Last 30 days" },
+  { key: "90", label: "Last 90 days" },
+  { key: "custom", label: "Custom dates" },
+];
+const LQ_METRICS = [
+  { key: "leads", label: "Form leads" },
+  { key: "chats", label: "Chats" },
+  { key: "both", label: "Leads + chats" },
+  { key: "spend", label: "Spend" },
+  { key: "cpl", label: "Cost per lead" },
+];
+const LQ_COLORS = ["#2a78d6", "#E2621B", "#1E8A54", "#7C3AED", "#C0392B", "#B7791F", "#0E7490", "#BE185D"];
+const LQ_MAXDAYS = 93;
+
+function lqDays(since, until) {
+  const out = [];
+  const d = new Date(`${since}T00:00:00`);
+  const end = new Date(`${until}T00:00:00`);
+  for (let g = 0; d <= end && g < 400; g += 1) { out.push(iso(d)); d.setDate(d.getDate() + 1); }
+  return out;
+}
+const lqVal = (o, m) => (m === "leads" ? o.leads : m === "chats" ? o.chats : m === "both" ? o.leads + o.chats : m === "spend" ? o.spend : (o.leads ? o.spend / o.leads : 0));
+const lqFmt = (v, m) => (m === "spend" || m === "cpl" ? inr(v, m === "cpl" ? 2 : 0) : num(v));
+function lqNice(v) {
+  if (v <= 0) return 1;
+  const p = 10 ** Math.floor(Math.log10(v));
+  const f = v / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+}
+
+/* Graph — ek series ho to bars, kai ho to lines. Hover pe us din ki detail. */
+function LqChart({ days, series, metric }) {
+  const ref = useRef(null);
+  const [w, setW] = useState(900);
+  const [hi, setHi] = useState(null);
+  useEffect(() => {
+    if (!ref.current) return undefined;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(300, e.contentRect.width)));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+  const H = 260; const padL = 52; const padR = 14; const padT = 14; const padB = 34;
+  const iw = Math.max(10, w - padL - padR); const ih = H - padT - padB;
+  /* Ginti (leads/chats) ke liye kam se kam 5 — warna 0.4, 0.8 jaise ajeeb nishaan */
+  const max = lqNice(Math.max(metric === "spend" || metric === "cpl" ? 0 : 5, ...series.flatMap((s) => s.vals)));
+  const n = days.length;
+  const step = iw / Math.max(1, n);
+  const x = (i) => padL + step * i + step / 2;
+  const y = (v) => padT + ih - (v / max) * ih;
+  const bars = series.length === 1;
+  const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 62))));
+  const lbl = (d) => { const [, m, dd] = d.split("-").map(Number); return `${dd} ${MONS[m - 1]}`; };
+  const onMove = (e) => {
+    const r = ref.current.getBoundingClientRect();
+    const i = Math.floor((e.clientX - r.left - padL) / step);
+    setHi(i >= 0 && i < n ? i : null);
+  };
+  return (
+    <div ref={ref} style={{ position: "relative", width: "100%" }} onMouseMove={onMove} onMouseLeave={() => setHi(null)}>
+      <svg width={w} height={H} role="img" aria-label="Leads by day chart" style={{ display: "block" }}>
+        {[0, 0.2, 0.4, 0.6, 0.8, 1].map((t) => (
+          <g key={t}>
+            <line x1={padL} x2={w - padR} y1={y(max * t)} y2={y(max * t)} stroke="#EEF0F5" />
+            <text x={padL - 8} y={y(max * t) + 4} textAnchor="end" fontSize="11" fill="#8A91A3">{lqFmt(max * t, metric === "cpl" ? "spend" : metric)}</text>
+          </g>
+        ))}
+        {days.map((d, i) => (i % every === 0 ? <text key={d} x={x(i)} y={H - 12} textAnchor="middle" fontSize="11" fill="#8A91A3">{lbl(d)}</text> : null))}
+        {hi != null ? <rect x={padL + step * hi} y={padT} width={step} height={ih} fill="#F4F5FA" /> : null}
+        {bars ? series[0].vals.map((v, i) => {
+          const bw = Math.max(2, Math.min(34, step * 0.62));
+          return <rect key={days[i]} x={x(i) - bw / 2} y={y(v)} width={bw} height={Math.max(0, padT + ih - y(v))} rx={Math.min(4, bw / 3)} fill={series[0].color} opacity={hi == null || hi === i ? 1 : 0.55} />;
+        }) : series.map((s) => (
+          <g key={s.key}>
+            <polyline fill="none" stroke={s.color} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" points={s.vals.map((v, i) => `${x(i)},${y(v)}`).join(" ")} />
+            {n <= 45 ? s.vals.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r={hi === i ? 4.5 : 2.6} fill="#fff" stroke={s.color} strokeWidth="2" />) : null}
+          </g>
+        ))}
+      </svg>
+      {hi != null ? (
+        <div style={{ position: "absolute", top: 8, left: Math.min(Math.max(x(hi) + 12, 0), w - 200), width: 188, background: "#1B2333", color: "#fff", borderRadius: 10, padding: "8px 10px", fontSize: 12, pointerEvents: "none", boxShadow: "0 8px 24px rgba(15,23,42,.25)" }}>
+          <b style={{ display: "block", marginBottom: 4 }}>{lrShort(days[hi])}</b>
+          {series.map((s) => (
+            <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 6, lineHeight: 1.6 }}>
+              <i style={{ width: 8, height: 8, borderRadius: 99, background: s.color, flex: "0 0 auto" }} />
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</span>
+              <b>{lqFmt(s.vals[hi], metric)}</b>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function ByLeadsTab({ tab }) {
+  const [period, setPeriod] = useState("7");
+  const [cf, setCf] = useState("");
+  const [ct, setCt] = useState("");
+  const [applied, setApplied] = useState(null);   /* custom dates — "Apply" dabane pe */
+  const [camps, setCamps] = useState([]);
+  const [running, setRunning] = useState(true);
+  const [q, setQ] = useState("");
+  const [metric, setMetric] = useState("leads");
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [openC, setOpenC] = useState({});
+  const [local, setLocal] = useState({ camps: [], accounts: [] });
+
+  useEffect(() => {
+    const load = () => setLocal({ camps: readRows("campaigns__live-ads"), accounts: readRows("ad-accounts__accounts") });
+    load();
+    window.addEventListener("vk-marketing-updated", load);
+    return () => window.removeEventListener("vk-marketing-updated", load);
+  }, []);
+
+  const R = useMemo(() => {
+    if (period === "custom") return applied || null;
+    const r = lrRange(period === "month" ? "month" : period === "lastmonth" ? "lastmonth" : period);
+    return { since: r.from, until: r.to };
+  }, [period, applied]);
+
+  async function fetchData(force = false) {
+    if (!R) return;
+    const key = `${R.since}_${R.until}`;
+    let cache = {}; try { cache = JSON.parse(localStorage.getItem(DCACHE) || "{}"); } catch { cache = {}; }
+    const hit = cache[key];
+    if (!force && hit && Date.now() - Date.parse(hit.at || 0) < 30 * 60000) { setData(hit); return; }
+    const ids = [...new Set(local.accounts.filter((a) => a.platform === "Meta").map((a) => String(a.accountId || "").trim()).filter((x) => /^act_\d+$/.test(x)))];
+    if (!ids.length) { setErr("Connect a Meta account in Ad Accounts first."); return; }
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch("/api/meta/hour-of-day", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountIds: ids, ...R, by: "daily" }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) setErr(j.error || "Could not load day-wise data from Meta");
+      else {
+        setData(j);
+        /* Sirf aakhri 4 range yaad rakho — browser ki jagah na bhare */
+        const keep = Object.entries({ ...cache, [key]: j }).sort((a, b) => Date.parse(b[1].at || 0) - Date.parse(a[1].at || 0)).slice(0, 4);
+        try { localStorage.setItem(DCACHE, JSON.stringify(Object.fromEntries(keep))); } catch { /* */ }
+      }
+    } catch { setErr("Could not reach the server"); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { if (local.accounts.length && R) fetchData(); }, [R?.since, R?.until, local.accounts.length]);
+
+  function applyCustom() {
+    if (!cf || !ct) return;
+    if (cf > ct) { setErr("From date is after To date."); return; }
+    if (lqDays(cf, ct).length > LQ_MAXDAYS) { setErr(`Pick up to ${LQ_MAXDAYS} days at a time.`); return; }
+    setErr(""); setApplied({ since: cf, until: ct });
+  }
+
+  const activeIds = useMemo(() => new Set(local.camps.filter((c) => String(c.status) === "Active" && c.extId).map((c) => String(c.extId))), [local.camps]);
+  const terms = useMemo(() => [...new Set(q.split(",").map((x) => x.trim()).filter(Boolean))].slice(0, 8), [q]);
+
+  const v = useMemo(() => {
+    if (!data) return null;
+    const rows = (data.rows || []).filter((r) => !running || activeIds.has(r.campaignId) || !activeIds.size);
+    const campList = [...new Map(rows.map((r) => [r.campaignId, r.campaign])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    const mine = camps.length ? rows.filter((r) => camps.includes(r.campaignId)) : rows;
+    const days = lqDays(data.since, data.until);
+    const blank = () => ({ leads: 0, chats: 0, spend: 0 });
+    const add = (o, r) => { o.leads += r.leads; o.chats += r.chats; o.spend += r.spend; };
+    const hit = (r, t) => lrKeyword(`${r.campaign} ${r.adset}`, t);
+
+    /* Har keyword ek series (keyword na ho to "All leads") */
+    const defs = terms.length ? terms.map((t, i) => ({ key: t, label: t, color: LQ_COLORS[i % LQ_COLORS.length], test: (r) => hit(r, t) }))
+      : [{ key: "__all", label: camps.length ? "Selected campaigns" : "All leads", color: "#2a78d6", test: () => true }];
+    const series = defs.map((d) => {
+      const byDay = new Map(days.map((x) => [x, blank()]));
+      const tot = blank(); const cs = new Set(); const as = new Set();
+      mine.forEach((r) => { if (!d.test(r)) return; const o = byDay.get(r.day); if (o) add(o, r); add(tot, r); cs.add(r.campaignId); as.add(r.adsetId); });
+      const daily = days.map((x) => byDay.get(x));
+      const best = daily.reduce((b, o, i) => (o.leads > (b ? daily[b.i].leads : -1) ? { i } : b), null);
+      return { ...d, daily, tot, campaigns: cs.size, adsets: as.size, best: best && daily[best.i].leads ? days[best.i] : "" };
+    });
+
+    /* Jo row kisi bhi keyword se mile (keyword na ho to saari) */
+    const matched = terms.length ? mine.filter((r) => terms.some((t) => hit(r, t))) : mine;
+    const tot = blank();
+    const cmap = new Map();
+    const dayTot = new Map(days.map((x) => [x, blank()]));
+    matched.forEach((r) => {
+      add(tot, r);
+      const dt = dayTot.get(r.day); if (dt) add(dt, r);
+      const c = cmap.get(r.campaignId) || { id: r.campaignId, name: r.campaign, ...blank(), days: new Set(), sets: new Map() };
+      add(c, r); if (r.leads) c.days.add(r.day);
+      const st = c.sets.get(r.adsetId) || { id: r.adsetId, name: r.adset, ...blank(), days: new Set() };
+      add(st, r); if (r.leads) st.days.add(r.day);
+      c.sets.set(r.adsetId, st); cmap.set(r.campaignId, c);
+    });
+    const list = [...cmap.values()].map((c) => ({ ...c, sets: [...c.sets.values()].sort((a, b) => b.leads - a.leads || b.spend - a.spend) }))
+      .sort((a, b) => b.leads - a.leads || b.spend - a.spend);
+    const allLeads = mine.reduce((n, r) => n + r.leads, 0);
+    const dayRows = days.map((d) => ({ d, ...dayTot.get(d) }));
+    const best = dayRows.reduce((b, x) => (!b || x.leads > b.leads ? x : b), null);
+    const withLeads = dayRows.filter((x) => x.leads > 0).length;
+    /* Pehla aadha vs doosra aadha — badh raha hai ya ghat raha */
+    const half = Math.floor(dayRows.length / 2);
+    const a1 = dayRows.slice(0, half).reduce((n, x) => n + x.leads, 0);
+    const a2 = dayRows.slice(dayRows.length - half).reduce((n, x) => n + x.leads, 0);
+    const trend = half && a1 ? ((a2 - a1) / a1) * 100 : null;
+    return { campList, days, series, list, tot, allLeads, dayRows, best, withLeads, trend, setCount: list.reduce((n, c) => n + c.sets.length, 0) };
+  }, [data, camps, running, activeIds, terms]);
+
+  const chartSeries = (v?.series || []).map((s) => ({ key: s.key, label: s.label, color: s.color, vals: s.daily.map((o) => lqVal(o, metric)) }));
+  const tag = data ? `${data.since}-to-${data.until}` : "";
+  function exportDays() {
+    const head = ["Date", ...(terms.length ? v.series.map((s) => `${s.label} leads`) : []), "Form leads", "Chats", "Spend", "Cost per lead"];
+    lrCsv(`vakilkaro-leads-by-day-${tag}.csv`, head, [...v.dayRows].reverse().map((x, ri) => {
+      const i = v.dayRows.length - 1 - ri;
+      return [x.d, ...(terms.length ? v.series.map((s) => s.daily[i].leads) : []), x.leads, x.chats, x.spend.toFixed(2), x.leads ? (x.spend / x.leads).toFixed(2) : ""];
+    }));
+  }
+  function exportCamps() {
+    const out = [];
+    v.list.forEach((c) => {
+      out.push([c.name, "", c.leads, c.chats, c.spend.toFixed(2), c.leads ? (c.spend / c.leads).toFixed(2) : "", c.days.size]);
+      c.sets.forEach((st) => out.push([c.name, st.name, st.leads, st.chats, st.spend.toFixed(2), st.leads ? (st.spend / st.leads).toFixed(2) : "", st.days.size]));
+    });
+    lrCsv(`vakilkaro-leads-by-campaign-${tag}.csv`, ["Campaign", "Ad set", "Form leads", "Chats", "Spend", "Cost per lead", "Days with leads"], out);
+  }
+  const inputStyle = { flex: 1, minWidth: 0, border: 0, outline: "none", background: "transparent", font: "600 13px var(--font)", color: "#1B2333" };
+  const rangeTxt = data ? `${lrShort(data.since)}${data.since !== data.until ? ` – ${lrShort(data.until)}` : ""}` : "";
+
+  return (
+    <div className="st">
+      <div className="lf-head">
+        <div className="pg-desc" style={{ marginTop: 0 }}>{tab.description}</div>
+        <div className="lf-acts">
+          {data?.at ? <span className="lf-at"><i className="fa-solid fa-rotate" /> Loaded {new Date(data.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span> : null}
+          <button type="button" className="btn btn-gold" disabled={busy || !R} onClick={() => fetchData(true)}>
+            <i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-rotate"}`} /> {busy ? "Loading from Meta..." : "Refresh from Meta"}
+          </button>
+        </div>
+      </div>
+
+      <div className="st-filters">
+        <label className="st-sel"><i className="fa-regular fa-calendar" />
+          <select value={period} onChange={(e) => { const k = e.target.value; if (k === "custom" && !cf) { const r0 = lrRange("7"); setCf(r0.from); setCt(r0.to); } setPeriod(k); }} aria-label="Period">
+            {LQ_PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select><i className="fa-solid fa-chevron-down st-cv" />
+        </label>
+        {period === "custom" ? (
+          <>
+            <label className="st-sel" style={{ paddingRight: 12 }}><span style={{ fontSize: 12, color: "#646B7E", fontWeight: 600 }}>From</span>
+              <input type="date" value={cf} max={ct || undefined} onChange={(e) => setCf(e.target.value)} aria-label="From date" style={inputStyle} /></label>
+            <label className="st-sel" style={{ paddingRight: 12 }}><span style={{ fontSize: 12, color: "#646B7E", fontWeight: 600 }}>To</span>
+              <input type="date" value={ct} min={cf || undefined} onChange={(e) => setCt(e.target.value)} aria-label="To date" style={inputStyle} /></label>
+            <button type="button" className="btn btn-gold" disabled={busy || !cf || !ct} onClick={applyCustom}><i className="fa-solid fa-check" /> Apply</button>
+          </>
+        ) : null}
+        <label className={`st-sel wide${q ? " on" : ""}`} style={{ paddingRight: 10 }}>
+          <i className="fa-solid fa-magnifying-glass" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Keywords — e.g. TM, GST, NGO" aria-label="Keywords" style={inputStyle} />
+          {q ? <button type="button" onClick={() => setQ("")} aria-label="Clear keywords" style={{ border: 0, background: "none", cursor: "pointer", color: "#959CAE", padding: 0 }}><i className="fa-solid fa-xmark" /></button> : null}
+        </label>
+        <MultiPick icon="fa-bullhorn" noun="campaigns" allLabel={`All ${running ? "running " : ""}campaigns`}
+          options={(v?.campList || []).map(([id, name]) => ({ id, label: name }))} value={camps} onChange={setCamps} />
+        <label className="st-check"><input type="checkbox" checked={running} onChange={(e) => setRunning(e.target.checked)} /> Running campaigns only</label>
+        {camps.length || q ? <button type="button" className="ph-clear" onClick={() => { setCamps([]); setQ(""); }}>Clear</button> : null}
+      </div>
+
+      {err ? <div className="lf-err"><i className="fa-solid fa-triangle-exclamation" /> {err}</div> : null}
+      {data?.errors?.length ? <div className="lf-err warn"><i className="fa-solid fa-circle-info" /> {data.errors.map((e) => e.message).join(" · ")}</div> : null}
+
+      {!v ? (
+        <div className="card"><div className="lf-empty"><i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-chart-line"}`} /><b>{busy ? "Reading day-wise data from Meta..." : period === "custom" && !applied ? "Pick the dates" : "No data yet"}</b><span>{period === "custom" && !applied ? "Choose From and To, then press Apply." : "Press “Refresh from Meta”."}</span></div></div>
+      ) : (
+        <>
+          <div className="lf-stats">
+            <div><span>Form leads{terms.length ? ` · ${terms.join(", ")}` : ""}</span><b>{num(v.tot.leads)}</b><em>{terms.length ? `${pct(v.tot.leads, v.allLeads).toFixed(0)}% of ${num(v.allLeads)} · ` : ""}{v.list.length} campaigns · {v.setCount} ad sets</em></div>
+            <div><span>Spend</span><b>{inr(v.tot.spend)}</b><em>{v.tot.leads ? `${inr(v.tot.spend / v.tot.leads, 2)} per lead` : "—"} · {num(v.tot.chats)} chats</em></div>
+            <div><span>Average per day</span><b>{(v.tot.leads / Math.max(1, v.days.length)).toFixed(1)}</b><em>{v.withLeads} of {v.days.length} days had leads</em></div>
+            <div><span>Best day</span><b className="st-txt">{v.best && v.best.leads ? lrShort(v.best.d) : "—"}</b><em>{v.best && v.best.leads ? `${num(v.best.leads)} leads` : ""}{v.trend != null ? ` · ${v.trend >= 0 ? "▲" : "▼"} ${Math.abs(v.trend).toFixed(0)}% 2nd half vs 1st` : ""}</em></div>
+          </div>
+
+          {/* ---- graph ---- */}
+          <section className="card st-card">
+            <div className="st-card-h">
+              <span className="lf-form-ic"><i className="fa-solid fa-chart-line" /></span>
+              <div style={{ flex: 1, minWidth: 0 }}><b>{LQ_METRICS.find((m) => m.key === metric)?.label} by day</b><small>{rangeTxt}{terms.length > 1 ? " · one line per keyword" : ""} · hover to see a day</small></div>
+              <label className="st-sel"><i className="fa-solid fa-chart-simple" />
+                <select value={metric} onChange={(e) => setMetric(e.target.value)} aria-label="Graph shows">
+                  {LQ_METRICS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                </select><i className="fa-solid fa-chevron-down st-cv" />
+              </label>
+            </div>
+            <div style={{ padding: "4px 14px 6px" }}>
+              {chartSeries.length > 1 || terms.length ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", padding: "0 4px 6px", fontSize: 12.5, fontWeight: 600, color: "#334155" }}>
+                  {chartSeries.map((s) => <span key={s.key} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><i style={{ width: 10, height: 10, borderRadius: 3, background: s.color }} />{s.label}</span>)}
+                </div>
+              ) : null}
+              <LqChart days={v.days} series={chartSeries} metric={metric} />
+            </div>
+          </section>
+
+          {/* ---- keyword tally ---- */}
+          {terms.length ? (
+            <section className="card st-card">
+              <div className="st-card-h">
+                <span className="lf-form-ic"><i className="fa-solid fa-tags" /></span>
+                <div><b>Keywords compared</b><small>Leads that each keyword brought in {rangeTxt}</small></div>
+              </div>
+              <div className="tbl-scroll">
+                <table className="mod-table st-t">
+                  <thead><tr><th>Keyword</th><th className="ta-r">Campaigns</th><th className="ta-r">Ad sets</th><th className="ta-r">Form leads</th><th className="ta-r">Share</th><th className="ta-r">Chats</th><th className="ta-r">Spend</th><th className="ta-r">Cost / lead</th><th>Best day</th></tr></thead>
+                  <tbody>
+                    {v.series.map((s) => (
+                      <tr key={s.key}>
+                        <td><b><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: s.color, marginRight: 8 }} />{s.label}</b></td>
+                        <td className="ta-r">{s.campaigns}</td>
+                        <td className="ta-r">{s.adsets}</td>
+                        <td className="ta-r"><b>{num(s.tot.leads)}</b></td>
+                        <td className="ta-r">{pct(s.tot.leads, v.allLeads).toFixed(1)}%</td>
+                        <td className="ta-r">{num(s.tot.chats)}</td>
+                        <td className="ta-r">{inr(s.tot.spend, 2)}</td>
+                        <td className="ta-r">{s.tot.leads ? inr(s.tot.spend / s.tot.leads, 2) : <span className="mut">—</span>}</td>
+                        <td>{s.best ? lrShort(s.best) : <span className="mut">—</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
+
+          {/* ---- campaigns ---- */}
+          <section className="card st-card">
+            <div className="st-card-h">
+              <span className="lf-form-ic"><i className="fa-solid fa-bullhorn" /></span>
+              <div style={{ flex: 1, minWidth: 0 }}><b>Campaigns &amp; ad sets</b><small>{terms.length ? `Matching ${terms.map((t) => `“${t}”`).join(", ")}` : camps.length ? `${camps.length} campaigns` : "All campaigns"} · click a campaign to see its ad sets</small></div>
+              <button type="button" className="btn btn-ghost" onClick={exportCamps} disabled={!v.list.length}><i className="fa-solid fa-file-csv" /> CSV</button>
+            </div>
+            {v.list.length ? (
+              <div className="tbl-scroll" style={{ maxHeight: 480 }}>
+                <table className="mod-table st-t">
+                  <thead><tr><th>Campaign / ad set</th><th className="ta-r">Form leads</th><th className="ta-r">Chats</th><th className="ta-r">Spend</th><th className="ta-r">Cost / lead</th><th className="ta-r">Days with leads</th></tr></thead>
+                  <tbody>
+                    {v.list.map((c) => (
+                      <Fragment key={c.id}>
+                        <tr onClick={() => setOpenC((o) => ({ ...o, [c.id]: !o[c.id] }))} style={{ cursor: "pointer", background: openC[c.id] ? "#FFFBF0" : undefined }}>
+                          <td style={openC[c.id] ? { background: "#FFFBF0" } : undefined}><b><i className={`fa-solid fa-chevron-${openC[c.id] ? "down" : "right"}`} style={{ fontSize: 10, color: "#959CAE", marginRight: 8 }} />{c.name}</b><small className="mut" style={{ display: "block", marginLeft: 18 }}>{c.sets.length} ad set{c.sets.length === 1 ? "" : "s"}</small></td>
+                          <td className="ta-r"><b>{num(c.leads)}</b></td>
+                          <td className="ta-r">{num(c.chats)}</td>
+                          <td className="ta-r">{inr(c.spend, 2)}</td>
+                          <td className="ta-r">{c.leads ? inr(c.spend / c.leads, 2) : <span className="mut">—</span>}</td>
+                          <td className="ta-r">{c.days.size}</td>
+                        </tr>
+                        {openC[c.id] ? c.sets.map((st) => (
+                          <tr key={`${c.id}-${st.id}`} style={{ background: "#FAFBFD" }}>
+                            <td style={{ paddingLeft: 34, background: "#FAFBFD" }}><i className="fa-solid fa-layer-group" style={{ fontSize: 11, color: "#959CAE", marginRight: 6 }} />{st.name}</td>
+                            <td className="ta-r"><b>{num(st.leads)}</b></td>
+                            <td className="ta-r">{num(st.chats)}</td>
+                            <td className="ta-r">{inr(st.spend, 2)}</td>
+                            <td className="ta-r">{st.leads ? inr(st.spend / st.leads, 2) : <span className="mut">—</span>}</td>
+                            <td className="ta-r">{st.days.size}</td>
+                          </tr>
+                        )) : null}
+                      </Fragment>
+                    ))}
+                    <tr style={{ background: "#F4F5FA" }}>
+                      <td style={{ background: "#F4F5FA" }}><b>Total</b></td>
+                      <td className="ta-r" style={{ background: "#F4F5FA" }}><b>{num(v.tot.leads)}</b></td>
+                      <td className="ta-r" style={{ background: "#F4F5FA" }}><b>{num(v.tot.chats)}</b></td>
+                      <td className="ta-r" style={{ background: "#F4F5FA" }}><b>{inr(v.tot.spend, 2)}</b></td>
+                      <td className="ta-r" style={{ background: "#F4F5FA" }}><b>{v.tot.leads ? inr(v.tot.spend / v.tot.leads, 2) : "—"}</b></td>
+                      <td className="ta-r" style={{ background: "#F4F5FA" }}><b>{v.withLeads}</b></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : <div className="lf-empty"><i className="fa-solid fa-magnifying-glass" /><b>Nothing found</b><span>{terms.length ? "No campaign or ad set has these keywords in its name in this period." : "No ads ran in this period."}</span></div>}
+          </section>
+
+          {/* ---- day-wise ---- */}
+          <section className="card st-card">
+            <div className="st-card-h">
+              <span className="lf-form-ic"><i className="fa-regular fa-calendar-days" /></span>
+              <div style={{ flex: 1, minWidth: 0 }}><b>Day by day</b><small>Newest day first</small></div>
+              <button type="button" className="btn btn-gold" onClick={exportDays}><i className="fa-solid fa-file-arrow-down" /> Export CSV</button>
+            </div>
+            <div className="tbl-scroll" style={{ maxHeight: 420 }}>
+              <table className="mod-table st-t">
+                <thead><tr><th>Date</th>{terms.length ? v.series.map((s) => <th key={s.key} className="ta-r" style={{ color: s.color }}>{s.label}</th>) : null}<th className="ta-r">Form leads</th><th className="ta-r">Chats</th><th className="ta-r">Spend</th><th className="ta-r">Cost / lead</th></tr></thead>
+                <tbody>
+                  {[...v.dayRows].reverse().map((x, ri) => {
+                    const i = v.dayRows.length - 1 - ri;
+                    return (
+                      <tr key={x.d}>
+                        <td><b>{lrShort(x.d)}</b></td>
+                        {terms.length ? v.series.map((s) => <td key={s.key} className="ta-r">{s.daily[i].leads ? num(s.daily[i].leads) : <span className="mut">–</span>}</td>) : null}
+                        <td className="ta-r"><b>{num(x.leads)}</b></td>
+                        <td className="ta-r">{num(x.chats)}</td>
+                        <td className="ta-r">{inr(x.spend, 2)}</td>
+                        <td className="ta-r">{x.leads ? inr(x.spend / x.leads, 2) : <span className="mut">—</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <p className="st-note"><i className="fa-solid fa-circle-info" /> Keywords look at campaign and ad set names — “TM” also finds “Trademark”. Separate keywords with a comma to compare them (up to 8). Up to {LQ_MAXDAYS} days at a time.</p>
+        </>
+      )}
+    </div>
+  );
+}
