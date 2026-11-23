@@ -734,6 +734,7 @@ const lrDate = (s) => {
 const lrShort = (isoDay) => { const [y, m, d] = String(isoDay).split("-").map(Number); return m ? `${d} ${MONS[m - 1]} ${y}` : ""; };
 function lrStageTone(label) {
   const s = String(label || "").toLowerCase();
+  if (/store room|storeroom|remarketing/.test(s)) return { c: "#B7791F", bg: "#FFF6E0" };
   if (/won|converted|closed won|paid/.test(s)) return { c: "#1E8A54", bg: "#E8F6EE" };
   if (/lost|not interested|junk|reject|invalid|wrong|dead|spam/.test(s)) return { c: "#C0392B", bg: "#FDECEC" };
   if (/not answer|no answer|unanswer|not reach|switch|rnr|busy/.test(s)) return { c: "#E2621B", bg: "#FFF1E8" };
@@ -1005,7 +1006,7 @@ export function LeadReport() {
             {[
               { k: "created", on: view === "created", icon: "fa-inbox", c: "#2a78d6", bg: "#EAF2FD", title: "Created in these dates", n: data.rows.length, sub: "New leads that came into the CRM", click: () => setView("created") },
               { k: "reeng", on: view === "reeng", icon: "fa-rotate-left", c: "#D33F49", bg: "#FDECEE", title: "Re-engaged in these dates", n: v.reengAll, sub: data.reengOk === false ? "Re-engaged data not found in the CRM" : `${num(data.reengEvents || 0)} repeat enquiries · old leads that came back`, click: () => setView("reeng") },
-              { k: "store", on: where === "store", icon: "fa-box-archive", c: "#B7791F", bg: "#FFF6E0", title: "In store room", n: v.storeN, sub: `${pct(v.storeN, v.pre.length).toFixed(1)}% of these leads · counted in the total`, click: () => setWhere(where === "store" ? "all" : "store") },
+              { k: "store", on: where === "store", icon: "fa-box-archive", c: "#B7791F", bg: "#FFF6E0", title: "In store room", n: v.storeN, sub: `${pct(v.storeN, v.pre.length).toFixed(1)}% of these leads${data.storeTotal != null ? ` · ${num(data.storeTotal)} in store room right now (all dates)` : ""}`, click: () => setWhere(where === "store" ? "all" : "store") },
             ].map((b) => (
               <button type="button" key={b.k} onClick={b.click} aria-pressed={b.on} className="card"
                 style={{ textAlign: "left", cursor: "pointer", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, border: b.on ? `2px solid ${b.c}` : "1px solid var(--pm-line,#E3E6EF)", background: b.on ? b.bg : "#fff", font: "inherit", color: "inherit" }}>
