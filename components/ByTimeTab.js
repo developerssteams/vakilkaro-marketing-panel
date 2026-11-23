@@ -785,6 +785,8 @@ export function LeadReport() {
   const [sources, setSources] = useState([]);
   const [camps, setCamps] = useState([]);
   const [pipe, setPipe] = useState("");
+  const [where, setWhere] = useState("all");      /* all · pipeline · store (store room) */
+  const [view, setView] = useState("created");    /* created · reeng (dobara aayi leads) */
   const [group, setGroup] = useState("month");
   const [asPct, setAsPct] = useState(false);
   const [page, setPage] = useState(1);
@@ -800,29 +802,47 @@ export function LeadReport() {
       if (!r.ok) { setErr(j.error || "Could not load leads from CRM"); setSetup(Boolean(j.needsSetup)); return; }
       const D = j.dict || {};
       const at = (k, i) => (i >= 0 ? D[k]?.[i] || "" : "");
-      const rows = (j.rows || []).map((a) => ({
+      const dec = (a) => ({
         id: a[0], created: a[1], day: String(a[1]).slice(0, 10), name: a[2], phone: a[3], email: a[4],
         stage: at("stage", a[5]) || "No stage", staff: at("staff", a[6]) || "Unassigned", service: at("service", a[7]),
         source: at("source", a[8]), campaign: at("campaign", a[9]), pipeline: at("pipeline", a[10]),
         deal: Number(a[11]) || 0, updated: a[12], city: a[13], state: at("state", a[14]),
-      }));
-      setData({ ...j, rows });
+        store: a[15] === 1, reengTotal: Number(a[16]) || 0,
+      });
+      const rows = (j.rows || []).map(dec);
+      const extra = (j.extraRows || []).map(dec);
+      /* Re-engaged: har lead ke liye in dates me kitni baar wapas aayi + aakhri baar kab */
+      const re = new Map();
+      (j.reeng || []).forEach(([id, when, src, on, svc]) => {
+        const k = String(id);
+        const o = re.get(k) || { times: 0, at: "", src: "", on: "", svc: "" };
+        o.times += 1;
+        if (!o.at || when > o.at) Object.assign(o, { at: when, src, on, svc });
+        re.set(k, o);
+      });
+      const withRe = (r) => { const o = re.get(String(r.id)); return o ? { ...r, reengIn: o.times, reengAt: o.at, reengSrc: o.src, reengSvc: o.svc } : { ...r, reengIn: 0, reengAt: "" }; };
+      setData({ ...j, rows: rows.map(withRe), extra: extra.map(withRe), reengEvents: (j.reeng || []).length });
     } catch { setErr("Could not reach the server"); }
     finally { setBusy(false); }
   }
   useEffect(() => { if (period !== "custom") load(); }, [period]);
-  useEffect(() => { setPage(1); }, [q, kw, stages, services, staff, sources, camps, pipe, data]);
+  useEffect(() => { setPage(1); }, [q, kw, stages, services, staff, sources, camps, pipe, where, view, data]);
 
   const v = useMemo(() => {
     if (!data) return null;
-    const all = data.rows;
+    /* "Re-engaged" view: in dates me jo leads dobara aayi (chahe pehle kabhi bani hon).
+       Unka din = jis din wapas aayi. */
+    const reengList = [...data.rows, ...(data.extra || [])].filter((r) => r.reengIn > 0)
+      .map((r) => ({ ...r, day: String(r.reengAt).slice(0, 10) }))
+      .sort((a, b) => String(b.reengAt).localeCompare(String(a.reengAt)));
+    const all = view === "reeng" ? reengList : data.rows;
     const lostSet = new Set((data.lostValues || []).map((x) => String(x).toLowerCase()));
     const isWon = (s) => /\bwon\b|converted/i.test(s);
     const isLost = (s) => lostSet.has(String(s).toLowerCase()) || /lost|not interested|junk|reject/i.test(s);
     const uniq = (k) => { const m = new Map(); all.forEach((r) => { const x = r[k]; if (x) m.set(x, (m.get(x) || 0) + 1); }); return [...m.entries()].sort((a, b) => b[1] - a[1]); };
     const t = q.trim().toLowerCase();
     const tDigits = t.replace(/\D/g, "");
-    const base = all.filter((r) => {
+    const pre = all.filter((r) => {
       if (pipe && r.pipeline !== pipe) return false;
       if (services.length && !services.includes(r.service)) return false;
       if (staff.length && !staff.includes(r.staff)) return false;
@@ -836,6 +856,11 @@ export function LeadReport() {
       }
       return true;
     });
+    /* Store room / pipeline — baaki filter ke baad ginti (box me dikhane ke liye) */
+    const storeN = pre.filter((r) => r.store).length;
+    const reengN = pre.filter((r) => r.reengIn > 0).length;
+    const reengTimes = pre.reduce((n, r) => n + (r.reengIn || 0), 0);
+    const base = where === "store" ? pre.filter((r) => r.store) : where === "pipeline" ? pre.filter((r) => !r.store) : pre;
     /* Stage boxes — stage filter ke bina (taaki baaki stages ki ginti bhi dikhe) */
     const cnt = new Map(); const val = new Map();
     base.forEach((r) => { cnt.set(r.stage, (cnt.get(r.stage) || 0) + 1); val.set(r.stage, (val.get(r.stage) || 0) + r.deal); });
@@ -849,6 +874,7 @@ export function LeadReport() {
     const won = list.filter((r) => isWon(r.stage));
     const lost = list.filter((r) => isLost(r.stage));
     const wonVal = won.reduce((a, r) => a + r.deal, 0);
+    const storeList = list.filter((r) => r.store && !isWon(r.stage) && !isLost(r.stage));
 
     /* Breakdown: rows = group, columns = stages */
     const keyOf = (r) => {
@@ -875,14 +901,14 @@ export function LeadReport() {
       return k;
     };
     return {
-      all, base, list, stageCards, won, lost, wonVal, groups, cols, totBy, label,
+      all, pre, base, list, stageCards, won, lost, wonVal, storeList, storeN, reengN, reengTimes, reengAll: reengList.length, groups, cols, totBy, label,
       opts: { service: uniq("service"), staff: uniq("staff"), source: uniq("source"), campaign: uniq("campaign"), pipeline: uniq("pipeline") },
     };
-  }, [data, q, kw, stages, services, staff, sources, camps, pipe, group]);
+  }, [data, q, kw, stages, services, staff, sources, camps, pipe, group, where, view]);
 
   const toggleStage = (k) => setStages((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
-  const anyFilter = q || kw || stages.length || services.length || staff.length || sources.length || camps.length || pipe;
-  const clearAll = () => { setQ(""); setKw(""); setStages([]); setServices([]); setStaff([]); setSources([]); setCamps([]); setPipe(""); };
+  const anyFilter = q || kw || stages.length || services.length || staff.length || sources.length || camps.length || pipe || where !== "all";
+  const clearAll = () => { setQ(""); setKw(""); setStages([]); setServices([]); setStaff([]); setSources([]); setCamps([]); setPipe(""); setWhere("all"); };
   const opt = (arr) => arr.map(([k, n]) => ({ id: k, label: `${k} (${num(n)})` }));
   const pages = v ? Math.max(1, Math.ceil(v.list.length / LR_PER)) : 1;
   const cur = Math.min(page, pages);
@@ -890,9 +916,9 @@ export function LeadReport() {
   const tag = `${R.from}-to-${R.to}`;
 
   function exportLeads() {
-    lrCsv(`vakilkaro-lead-report-${tag}.csv`,
-      ["Lead ID", "Created", "Name", "Phone", "Email", "Service", "Stage", "Pipeline", "Staff", "Source", "Campaign", "Deal value", "City", "State", "Last updated"],
-      v.list.map((r) => [r.id, r.created, r.name, r.phone, r.email, r.service, r.stage, r.pipeline, r.staff, r.source, r.campaign, r.deal || "", r.city, r.state, r.updated]));
+    lrCsv(`vakilkaro-${view === "reeng" ? "reengaged-leads" : "lead-report"}-${tag}.csv`,
+      ["Lead ID", "Created", "Name", "Phone", "Email", "Service", "Stage", "Store room", "Pipeline", "Staff", "Source", "Campaign", "Deal value", "City", "State", "Last updated", "Re-engaged in these dates", "Last re-engaged", "Re-engaged (all time)"],
+      v.list.map((r) => [r.id, r.created, r.name, r.phone, r.email, r.service, r.stage, r.store ? "Yes" : "", r.pipeline, r.staff, r.source, r.campaign, r.deal || "", r.city, r.state, r.updated, r.reengIn || "", r.reengAt || "", r.reengTotal || ""]));
   }
   function exportBreakdown() {
     const g = LR_GROUPS.find((x) => x.key === group)?.label || "Group";
@@ -906,7 +932,7 @@ export function LeadReport() {
   return (
     <div className="st">
       <div className="lf-head">
-        <div className="pg-desc" style={{ marginTop: 0 }}>Every lead created in the CRM in the chosen dates, and the stage it is in right now. Click a stage box to see only those leads. Search a service keyword like “TM” to see all related leads.</div>
+        <div className="pg-desc" style={{ marginTop: 0 }}>Every lead created in the CRM in the chosen dates (store room leads included), and the stage it is in right now. Switch to “Re-engaged” to see old leads that came back in these dates. Search a service keyword like “TM” to see all related leads.</div>
         <div className="lf-acts">
           {data?.at ? <span className="lf-at"><i className="fa-solid fa-rotate" /> Loaded {new Date(data.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span> : null}
           <button type="button" className="btn btn-gold" disabled={busy} onClick={load}>
@@ -957,6 +983,13 @@ export function LeadReport() {
               </select><i className="fa-solid fa-chevron-down st-cv" />
             </label>
           ) : null}
+          <label className={`st-sel${where !== "all" ? " on" : ""}`}><i className="fa-solid fa-box-archive" />
+            <select value={where} onChange={(e) => setWhere(e.target.value)} aria-label="Pipeline or store room">
+              <option value="all">Pipeline + store room</option>
+              <option value="pipeline">Only in pipeline</option>
+              <option value="store">Only in store room</option>
+            </select><i className="fa-solid fa-chevron-down st-cv" />
+          </label>
           {anyFilter ? <button type="button" className="ph-clear" onClick={clearAll}>Clear all</button> : null}
         </div>
       ) : null}
@@ -968,11 +1001,30 @@ export function LeadReport() {
         <div className="card"><div className="lf-empty"><i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-chart-column"}`} /><b>{busy ? "Reading leads from the CRM..." : "No data yet"}</b><span>{busy ? "This can take a few seconds for a big date range." : "Pick the dates and press “Refresh from CRM”."}</span></div></div>
       ) : (
         <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
+            {[
+              { k: "created", on: view === "created", icon: "fa-inbox", c: "#2a78d6", bg: "#EAF2FD", title: "Created in these dates", n: data.rows.length, sub: "New leads that came into the CRM", click: () => setView("created") },
+              { k: "reeng", on: view === "reeng", icon: "fa-rotate-left", c: "#D33F49", bg: "#FDECEE", title: "Re-engaged in these dates", n: v.reengAll, sub: data.reengOk === false ? "Re-engaged data not found in the CRM" : `${num(data.reengEvents || 0)} repeat enquiries · old leads that came back`, click: () => setView("reeng") },
+              { k: "store", on: where === "store", icon: "fa-box-archive", c: "#B7791F", bg: "#FFF6E0", title: "In store room", n: v.storeN, sub: `${pct(v.storeN, v.pre.length).toFixed(1)}% of these leads · counted in the total`, click: () => setWhere(where === "store" ? "all" : "store") },
+            ].map((b) => (
+              <button type="button" key={b.k} onClick={b.click} aria-pressed={b.on} className="card"
+                style={{ textAlign: "left", cursor: "pointer", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, border: b.on ? `2px solid ${b.c}` : "1px solid var(--pm-line,#E3E6EF)", background: b.on ? b.bg : "#fff", font: "inherit", color: "inherit" }}>
+                <span style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", background: b.bg, color: b.c, flex: "0 0 auto" }}><i className={`fa-solid ${b.icon}`} /></span>
+                <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "#1B2333" }}>{b.title}</span>
+                  <b style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.02em", lineHeight: 1.1 }}>{num(b.n)}</b>
+                  <small style={{ fontSize: 11.5, color: "#5B6478" }}>{b.sub}</small>
+                </span>
+                {b.on ? <i className="fa-solid fa-check" style={{ marginLeft: "auto", color: b.c }} /> : null}
+              </button>
+            ))}
+          </div>
+
           <div className="lf-stats">
-            <div><span>Leads{anyFilter ? " (filtered)" : ""}</span><b>{num(v.list.length)}</b><em>{anyFilter ? `of ${num(v.all.length)} created in these dates` : `created ${lrShort(R.from)}${R.from !== R.to ? ` – ${lrShort(R.to)}` : ""}`}</em></div>
+            <div><span>{view === "reeng" ? "Re-engaged leads" : "Leads"}{anyFilter ? " (filtered)" : ""}</span><b>{num(v.list.length)}</b><em>{anyFilter ? `of ${num(v.all.length)} ${view === "reeng" ? "re-engaged" : "created"} in these dates` : `${view === "reeng" ? "came back" : "created"} ${lrShort(R.from)}${R.from !== R.to ? ` – ${lrShort(R.to)}` : ""}`}{view === "created" && v.reengN ? ` · ${num(v.reengN)} came back again` : ""}</em></div>
             <div><span>Won</span><b style={{ color: "#1E8A54" }}>{num(v.won.length)}</b><em>{pct(v.won.length, v.list.length).toFixed(1)}% conversion{v.wonVal ? ` · ${inr(v.wonVal)}` : ""}</em></div>
             <div><span>Lost / not interested</span><b style={{ color: "#C0392B" }}>{num(v.lost.length)}</b><em>{pct(v.lost.length, v.list.length).toFixed(1)}% of these leads</em></div>
-            <div><span>Still open</span><b>{num(v.list.length - v.won.length - v.lost.length)}</b><em>{pct(v.list.length - v.won.length - v.lost.length, v.list.length).toFixed(1)}% — being worked on</em></div>
+            <div><span>Still open</span><b>{num(v.list.length - v.won.length - v.lost.length)}</b><em>{pct(v.list.length - v.won.length - v.lost.length, v.list.length).toFixed(1)}%{v.storeList.length ? ` · ${num(v.storeList.length)} in store room` : " — being worked on"}</em></div>
           </div>
 
           {/* ---- stage boxes ---- */}
@@ -999,7 +1051,7 @@ export function LeadReport() {
           <section className="card st-card">
             <div className="st-card-h">
               <span className="lf-form-ic"><i className="fa-solid fa-table-cells" /></span>
-              <div style={{ flex: 1, minWidth: 0 }}><b>Where these leads are now</b><small>Leads created in each {LR_GROUPS.find((x) => x.key === group)?.label.toLowerCase()} and the stage they are in today</small></div>
+              <div style={{ flex: 1, minWidth: 0 }}><b>Where these leads are now</b><small>Leads {view === "reeng" ? "that came back" : "created"} in each {LR_GROUPS.find((x) => x.key === group)?.label.toLowerCase()} and the stage they are in today</small></div>
               <label className="st-sel"><i className="fa-solid fa-layer-group" />
                 <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Break down by">
                   {LR_GROUPS.map((g) => <option key={g.key} value={g.key}>By {g.label.toLowerCase()}</option>)}
@@ -1035,24 +1087,27 @@ export function LeadReport() {
           <section className="card st-card">
             <div className="st-card-h">
               <span className="lf-form-ic"><i className="fa-solid fa-list" /></span>
-              <div style={{ flex: 1, minWidth: 0 }}><b>Leads</b><small>{num(v.list.length)} lead{v.list.length === 1 ? "" : "s"}{stages.length ? ` · ${stages.join(", ")}` : ""}{kw ? ` · “${kw}”` : ""} · newest first</small></div>
+              <div style={{ flex: 1, minWidth: 0 }}><b>{view === "reeng" ? "Re-engaged leads" : "Leads"}</b><small>{num(v.list.length)} lead{v.list.length === 1 ? "" : "s"}{where === "store" ? " · store room" : where === "pipeline" ? " · in pipeline" : ""}{stages.length ? ` · ${stages.join(", ")}` : ""}{kw ? ` · “${kw}”` : ""} · newest first</small></div>
               <button type="button" className="btn btn-gold" onClick={exportLeads} disabled={!v.list.length}><i className="fa-solid fa-file-arrow-down" /> Export {num(v.list.length)} leads</button>
             </div>
             {v.list.length ? (
               <>
                 <div className="tbl-scroll">
                   <table className="mod-table st-t">
-                    <thead><tr><th>Lead</th><th>Created</th><th>Phone</th><th>Service</th><th>Stage</th><th>Staff</th><th>Source / campaign</th><th className="ta-r">Deal</th></tr></thead>
+                    <thead><tr><th>Lead</th><th>{view === "reeng" ? "Came back" : "Created"}</th><th>Phone</th><th>Service</th><th>Stage</th><th>Staff</th><th>Source / campaign</th><th className="ta-r">Deal</th></tr></thead>
                     <tbody>
                       {shown.map((r) => {
                         const tone = lrStageTone(r.stage);
                         return (
                           <tr key={r.id}>
                             <td><b>{r.name || "—"}</b><small className="mut" style={{ display: "block" }}>#{r.id}{r.city || r.state ? ` · ${[r.city, r.state].filter(Boolean).join(", ")}` : ""}</small></td>
-                            <td>{lrDate(r.created)}</td>
+                            <td>{view === "reeng" ? <>{lrDate(r.reengAt)}<small className="mut" style={{ display: "block" }}>Created {lrDate(r.created)}</small></> : lrDate(r.created)}</td>
                             <td>{r.phone || <span className="mut">—</span>}{r.email ? <small className="mut" style={{ display: "block" }}>{r.email}</small> : null}</td>
                             <td style={{ whiteSpace: "normal", minWidth: 160 }}>{r.service || <span className="mut">—</span>}</td>
-                            <td><span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 700, color: tone.c, background: tone.bg, borderRadius: 7, padding: "2px 8px" }}>{r.stage}</span>{r.pipeline ? <small className="mut" style={{ display: "block" }}>{r.pipeline}</small> : null}</td>
+                            <td><span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 700, color: tone.c, background: tone.bg, borderRadius: 7, padding: "2px 8px" }}>{r.stage}</span>
+                              {r.store ? <span style={{ display: "inline-block", marginLeft: 4, fontSize: 11, fontWeight: 700, color: "#B7791F", background: "#FFF6E0", borderRadius: 7, padding: "2px 7px" }}><i className="fa-solid fa-box-archive" /> Store room</span> : null}
+                              {r.reengIn ? <span title={`${r.reengIn} time(s) in these dates${r.reengSvc ? ` · asked about ${r.reengSvc}` : ""}`} style={{ display: "inline-block", marginLeft: 4, fontSize: 11, fontWeight: 700, color: "#D33F49", background: "#FDECEE", borderRadius: 7, padding: "2px 7px" }}><i className="fa-solid fa-rotate-left" /> Re-engaged{r.reengIn > 1 ? ` ×${r.reengIn}` : ""}</span> : null}
+                              {r.pipeline ? <small className="mut" style={{ display: "block" }}>{r.pipeline}</small> : null}</td>
                             <td>{r.staff}</td>
                             <td style={{ whiteSpace: "normal", minWidth: 160 }}>{r.source || <span className="mut">—</span>}{r.campaign ? <small className="mut" style={{ display: "block" }}>{r.campaign}</small> : null}</td>
                             <td className="ta-r">{r.deal ? inr(r.deal) : <span className="mut">—</span>}</td>
