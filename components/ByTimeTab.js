@@ -786,8 +786,7 @@ export function LeadReport() {
   const [sources, setSources] = useState([]);
   const [camps, setCamps] = useState([]);
   const [pipe, setPipe] = useState("");
-  const [where, setWhere] = useState("all");      /* all · pipeline · store (store room) */
-  const [view, setView] = useState("created");    /* created · reeng (dobara aayi leads) */
+  const [view, setView] = useState("created");    /* created · reeng (dobara aayi) · store (store room) */
   const [group, setGroup] = useState("month");
   const [asPct, setAsPct] = useState(false);
   const [page, setPage] = useState(1);
@@ -822,12 +821,16 @@ export function LeadReport() {
         re.set(k, o);
       });
       const withRe = (r) => { const o = re.get(String(r.id)); return o ? { ...r, reengIn: o.times, reengAt: o.at, reengSrc: o.src, reengSvc: o.svc } : { ...r, reengIn: 0, reengAt: "" }; };
-      setData({ ...j, rows: rows.map(withRe), extra: extra.map(withRe), reengEvents: (j.reeng || []).length });
+      /* Store room: sirf wo jo chuni dates me store me daali gayi (aur abhi bhi store me hain) */
+      const inRange = (d) => { const x = String(d || "").slice(0, 10); return x >= R.from && x <= R.to; };
+      const storeAll = (j.storeRows || []).map((a) => ({ ...dec(a), store: true, storeAt: a[17] || "" }));
+      const store = storeAll.filter((r) => inRange(r.storeAt));
+      setData({ ...j, rows: rows.map(withRe), extra: extra.map(withRe), store: store.map(withRe), reengEvents: (j.reeng || []).length });
     } catch { setErr("Could not reach the server"); }
     finally { setBusy(false); }
   }
   useEffect(() => { if (period !== "custom") load(); }, [period]);
-  useEffect(() => { setPage(1); }, [q, kw, stages, services, staff, sources, camps, pipe, where, view, data]);
+  useEffect(() => { setPage(1); }, [q, kw, stages, services, staff, sources, camps, pipe, view, data]);
 
   const v = useMemo(() => {
     if (!data) return null;
@@ -836,7 +839,7 @@ export function LeadReport() {
     const reengList = [...data.rows, ...(data.extra || [])].filter((r) => r.reengIn > 0)
       .map((r) => ({ ...r, day: String(r.reengAt).slice(0, 10) }))
       .sort((a, b) => String(b.reengAt).localeCompare(String(a.reengAt)));
-    const all = view === "reeng" ? reengList : data.rows;
+    const all = view === "reeng" ? reengList : view === "store" ? (data.store || []) : data.rows;
     const lostSet = new Set((data.lostValues || []).map((x) => String(x).toLowerCase()));
     const isWon = (s) => /\bwon\b|converted/i.test(s);
     const isLost = (s) => lostSet.has(String(s).toLowerCase()) || /lost|not interested|junk|reject/i.test(s);
@@ -858,10 +861,9 @@ export function LeadReport() {
       return true;
     });
     /* Store room / pipeline — baaki filter ke baad ginti (box me dikhane ke liye) */
-    const storeN = pre.filter((r) => r.store).length;
     const reengN = pre.filter((r) => r.reengIn > 0).length;
     const reengTimes = pre.reduce((n, r) => n + (r.reengIn || 0), 0);
-    const base = where === "store" ? pre.filter((r) => r.store) : where === "pipeline" ? pre.filter((r) => !r.store) : pre;
+    const base = pre;
     /* Stage boxes — stage filter ke bina (taaki baaki stages ki ginti bhi dikhe) */
     const cnt = new Map(); const val = new Map();
     base.forEach((r) => { cnt.set(r.stage, (cnt.get(r.stage) || 0) + 1); val.set(r.stage, (val.get(r.stage) || 0) + r.deal); });
@@ -875,7 +877,6 @@ export function LeadReport() {
     const won = list.filter((r) => isWon(r.stage));
     const lost = list.filter((r) => isLost(r.stage));
     const wonVal = won.reduce((a, r) => a + r.deal, 0);
-    const storeList = list.filter((r) => r.store && !isWon(r.stage) && !isLost(r.stage));
 
     /* Breakdown: rows = group, columns = stages */
     const keyOf = (r) => {
@@ -902,14 +903,14 @@ export function LeadReport() {
       return k;
     };
     return {
-      all, pre, base, list, stageCards, won, lost, wonVal, storeList, storeN, reengN, reengTimes, reengAll: reengList.length, groups, cols, totBy, label,
+      all, pre, base, list, stageCards, won, lost, wonVal, reengN, reengTimes, reengAll: reengList.length, groups, cols, totBy, label,
       opts: { service: uniq("service"), staff: uniq("staff"), source: uniq("source"), campaign: uniq("campaign"), pipeline: uniq("pipeline") },
     };
-  }, [data, q, kw, stages, services, staff, sources, camps, pipe, group, where, view]);
+  }, [data, q, kw, stages, services, staff, sources, camps, pipe, group, view]);
 
   const toggleStage = (k) => setStages((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
-  const anyFilter = q || kw || stages.length || services.length || staff.length || sources.length || camps.length || pipe || where !== "all";
-  const clearAll = () => { setQ(""); setKw(""); setStages([]); setServices([]); setStaff([]); setSources([]); setCamps([]); setPipe(""); setWhere("all"); };
+  const anyFilter = q || kw || stages.length || services.length || staff.length || sources.length || camps.length || pipe;
+  const clearAll = () => { setQ(""); setKw(""); setStages([]); setServices([]); setStaff([]); setSources([]); setCamps([]); setPipe(""); };
   const opt = (arr) => arr.map(([k, n]) => ({ id: k, label: `${k} (${num(n)})` }));
   const pages = v ? Math.max(1, Math.ceil(v.list.length / LR_PER)) : 1;
   const cur = Math.min(page, pages);
@@ -917,9 +918,9 @@ export function LeadReport() {
   const tag = `${R.from}-to-${R.to}`;
 
   function exportLeads() {
-    lrCsv(`vakilkaro-${view === "reeng" ? "reengaged-leads" : "lead-report"}-${tag}.csv`,
-      ["Lead ID", "Created", "Name", "Phone", "Email", "Service", "Stage", "Store room", "Pipeline", "Staff", "Source", "Campaign", "Deal value", "City", "State", "Last updated", "Re-engaged in these dates", "Last re-engaged", "Re-engaged (all time)"],
-      v.list.map((r) => [r.id, r.created, r.name, r.phone, r.email, r.service, r.stage, r.store ? "Yes" : "", r.pipeline, r.staff, r.source, r.campaign, r.deal || "", r.city, r.state, r.updated, r.reengIn || "", r.reengAt || "", r.reengTotal || ""]));
+    lrCsv(`vakilkaro-${view === "reeng" ? "reengaged-leads" : view === "store" ? "store-room-leads" : "lead-report"}-${tag}.csv`,
+      ["Lead ID", "Created", "Name", "Phone", "Email", "Service", "Stage", "Store room", "Pipeline", "Staff", "Source", "Campaign", "Deal value", "City", "State", "Last updated", "Re-engaged in these dates", "Last re-engaged", "Re-engaged (all time)", "In store since"],
+      v.list.map((r) => [r.id, r.created, r.name, r.phone, r.email, r.service, r.stage, r.store ? "Yes" : "", r.pipeline, r.staff, r.source, r.campaign, r.deal || "", r.city, r.state, r.updated, r.reengIn || "", r.reengAt || "", r.reengTotal || "", r.storeAt || ""]));
   }
   function exportBreakdown() {
     const g = LR_GROUPS.find((x) => x.key === group)?.label || "Group";
@@ -933,7 +934,7 @@ export function LeadReport() {
   return (
     <div className="st">
       <div className="lf-head">
-        <div className="pg-desc" style={{ marginTop: 0 }}>Every lead created in the CRM in the chosen dates (store room leads included), and the stage it is in right now. Switch to “Re-engaged” to see old leads that came back in these dates. Search a service keyword like “TM” to see all related leads.</div>
+        <div className="pg-desc" style={{ marginTop: 0 }}>Every lead created in the CRM in the chosen dates and the stage it is in right now — same numbers as the CRM. Click “Re-engaged” for old leads that came back in these dates, or “In store room” for the CRM's store room. Search a service keyword like “TM” to see all related leads.</div>
         <div className="lf-acts">
           {data?.at ? <span className="lf-at"><i className="fa-solid fa-rotate" /> Loaded {new Date(data.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span> : null}
           <button type="button" className="btn btn-gold" disabled={busy} onClick={load}>
@@ -984,13 +985,6 @@ export function LeadReport() {
               </select><i className="fa-solid fa-chevron-down st-cv" />
             </label>
           ) : null}
-          <label className={`st-sel${where !== "all" ? " on" : ""}`}><i className="fa-solid fa-box-archive" />
-            <select value={where} onChange={(e) => setWhere(e.target.value)} aria-label="Pipeline or store room">
-              <option value="all">Pipeline + store room</option>
-              <option value="pipeline">Only in pipeline</option>
-              <option value="store">Only in store room</option>
-            </select><i className="fa-solid fa-chevron-down st-cv" />
-          </label>
           {anyFilter ? <button type="button" className="ph-clear" onClick={clearAll}>Clear all</button> : null}
         </div>
       ) : null}
@@ -1004,9 +998,9 @@ export function LeadReport() {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
             {[
-              { k: "created", on: view === "created", icon: "fa-inbox", c: "#2a78d6", bg: "#EAF2FD", title: "Created in these dates", n: data.rows.length, sub: "New leads that came into the CRM", click: () => setView("created") },
+              { k: "created", on: view === "created", icon: "fa-inbox", c: "#2a78d6", bg: "#EAF2FD", title: "Created in these dates", n: data.truncated ? data.total : data.rows.length, sub: "Same as CRM → All Leads for these dates", click: () => setView("created") },
               { k: "reeng", on: view === "reeng", icon: "fa-rotate-left", c: "#D33F49", bg: "#FDECEE", title: "Re-engaged in these dates", n: v.reengAll, sub: data.reengOk === false ? "Re-engaged data not found in the CRM" : `${num(data.reengEvents || 0)} repeat enquiries · old leads that came back`, click: () => setView("reeng") },
-              { k: "store", on: where === "store", icon: "fa-box-archive", c: "#B7791F", bg: "#FFF6E0", title: "In store room", n: v.storeN, sub: `${pct(v.storeN, v.pre.length).toFixed(1)}% of these leads${data.storeTotal != null ? ` · ${num(data.storeTotal)} in store room right now (all dates)` : ""}`, click: () => setWhere(where === "store" ? "all" : "store") },
+              { k: "store", on: view === "store", icon: "fa-box-archive", c: "#B7791F", bg: "#FFF6E0", title: "Moved to store room", n: (data.store || []).length, sub: data.storeTotal == null ? "Store room not found in the CRM" : `Put in store room in these dates · ${num(data.storeTotal)} in store room right now (all dates)`, click: () => setView("store") },
             ].map((b) => (
               <button type="button" key={b.k} onClick={b.click} aria-pressed={b.on} className="card"
                 style={{ textAlign: "left", cursor: "pointer", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, border: b.on ? `2px solid ${b.c}` : "1px solid var(--pm-line,#E3E6EF)", background: b.on ? b.bg : "#fff", font: "inherit", color: "inherit" }}>
@@ -1022,10 +1016,10 @@ export function LeadReport() {
           </div>
 
           <div className="lf-stats">
-            <div><span>{view === "reeng" ? "Re-engaged leads" : "Leads"}{anyFilter ? " (filtered)" : ""}</span><b>{num(v.list.length)}</b><em>{anyFilter ? `of ${num(v.all.length)} ${view === "reeng" ? "re-engaged" : "created"} in these dates` : `${view === "reeng" ? "came back" : "created"} ${lrShort(R.from)}${R.from !== R.to ? ` – ${lrShort(R.to)}` : ""}`}{view === "created" && v.reengN ? ` · ${num(v.reengN)} came back again` : ""}</em></div>
+            <div><span>{view === "reeng" ? "Re-engaged leads" : view === "store" ? "Store room leads" : "Leads"}{anyFilter ? " (filtered)" : ""}</span><b>{num(v.list.length)}</b><em>{view === "store" ? (anyFilter ? `of ${num(v.all.length)} moved to store room in these dates` : `moved to store room ${lrShort(R.from)}${R.from !== R.to ? ` – ${lrShort(R.to)}` : ""} · still there`) : anyFilter ? `of ${num(v.all.length)} ${view === "reeng" ? "re-engaged" : "created"} in these dates` : `${view === "reeng" ? "came back" : "created"} ${lrShort(R.from)}${R.from !== R.to ? ` – ${lrShort(R.to)}` : ""}`}{view === "created" && v.reengN ? ` · ${num(v.reengN)} came back again` : ""}</em></div>
             <div><span>Won</span><b style={{ color: "#1E8A54" }}>{num(v.won.length)}</b><em>{pct(v.won.length, v.list.length).toFixed(1)}% conversion{v.wonVal ? ` · ${inr(v.wonVal)}` : ""}</em></div>
             <div><span>Lost / not interested</span><b style={{ color: "#C0392B" }}>{num(v.lost.length)}</b><em>{pct(v.lost.length, v.list.length).toFixed(1)}% of these leads</em></div>
-            <div><span>Still open</span><b>{num(v.list.length - v.won.length - v.lost.length)}</b><em>{pct(v.list.length - v.won.length - v.lost.length, v.list.length).toFixed(1)}%{v.storeList.length ? ` · ${num(v.storeList.length)} in store room` : " — being worked on"}</em></div>
+            <div><span>Still open</span><b>{num(v.list.length - v.won.length - v.lost.length)}</b><em>{pct(v.list.length - v.won.length - v.lost.length, v.list.length).toFixed(1)}%{view === "store" ? " — waiting in store room" : " — being worked on"}</em></div>
           </div>
 
           {/* ---- stage boxes ---- */}
@@ -1088,7 +1082,7 @@ export function LeadReport() {
           <section className="card st-card">
             <div className="st-card-h">
               <span className="lf-form-ic"><i className="fa-solid fa-list" /></span>
-              <div style={{ flex: 1, minWidth: 0 }}><b>{view === "reeng" ? "Re-engaged leads" : "Leads"}</b><small>{num(v.list.length)} lead{v.list.length === 1 ? "" : "s"}{where === "store" ? " · store room" : where === "pipeline" ? " · in pipeline" : ""}{stages.length ? ` · ${stages.join(", ")}` : ""}{kw ? ` · “${kw}”` : ""} · newest first</small></div>
+              <div style={{ flex: 1, minWidth: 0 }}><b>{view === "reeng" ? "Re-engaged leads" : view === "store" ? "Store room leads" : "Leads"}</b><small>{num(v.list.length)} lead{v.list.length === 1 ? "" : "s"}{view === "store" ? " · stage = where it was before going to store room" : ""}{stages.length ? ` · ${stages.join(", ")}` : ""}{kw ? ` · “${kw}”` : ""} · newest first</small></div>
               <button type="button" className="btn btn-gold" onClick={exportLeads} disabled={!v.list.length}><i className="fa-solid fa-file-arrow-down" /> Export {num(v.list.length)} leads</button>
             </div>
             {v.list.length ? (
@@ -1102,7 +1096,7 @@ export function LeadReport() {
                         return (
                           <tr key={r.id}>
                             <td><b>{r.name || "—"}</b><small className="mut" style={{ display: "block" }}>#{r.id}{r.city || r.state ? ` · ${[r.city, r.state].filter(Boolean).join(", ")}` : ""}</small></td>
-                            <td>{view === "reeng" ? <>{lrDate(r.reengAt)}<small className="mut" style={{ display: "block" }}>Created {lrDate(r.created)}</small></> : lrDate(r.created)}</td>
+                            <td>{view === "reeng" ? <>{lrDate(r.reengAt)}<small className="mut" style={{ display: "block" }}>Created {lrDate(r.created)}</small></> : view === "store" ? <>{lrDate(r.created)}<small className="mut" style={{ display: "block" }}>In store since {lrDate(r.storeAt)}</small></> : lrDate(r.created)}</td>
                             <td>{r.phone || <span className="mut">—</span>}{r.email ? <small className="mut" style={{ display: "block" }}>{r.email}</small> : null}</td>
                             <td style={{ whiteSpace: "normal", minWidth: 160 }}>{r.service || <span className="mut">—</span>}</td>
                             <td><span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 700, color: tone.c, background: tone.bg, borderRadius: 7, padding: "2px 8px" }}>{r.stage}</span>
@@ -1123,7 +1117,7 @@ export function LeadReport() {
             ) : <div className="lf-empty"><i className="fa-solid fa-magnifying-glass" /><b>No leads match</b><span>Change or clear the filters.</span></div>}
           </section>
 
-          <p className="st-note"><i className="fa-solid fa-circle-info" /> Dates are when the lead was created in the CRM; the stage is where it is right now. Service keyword looks at the service and campaign — “TM” also finds “Trademark”. Separate keywords with a comma to find more than one (e.g. TM, GST).</p>
+          <p className="st-note"><i className="fa-solid fa-circle-info" /> Leads match CRM → All Leads for the same dates; store room shows leads put into the store room in the chosen dates that are still there (the box also shows the CRM's total right now). A lead in the store room is not in All Leads. The stage is where the lead is right now. Service keyword looks at the service and campaign — “TM” also finds “Trademark”. Separate keywords with a comma to find more than one (e.g. TM, GST).</p>
         </>
       )}
     </div>
