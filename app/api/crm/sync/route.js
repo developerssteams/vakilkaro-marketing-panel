@@ -15,7 +15,7 @@ export const maxDuration = 60;
    status / form mapping / sync / subscribe karta hai. Key = CRM ki cron key
    (CRM ke database ki app_settings se), isliye panel me alag se kuch nahi daalna. */
 async function metaLeads(d, user, request) {
-  const allowed = ["status", "map", "sync", "subscribe", "audit"];
+  const allowed = ["status", "map", "sync", "subscribe", "audit", "log"];
   const act = allowed.includes(d.meta) ? d.meta : "status";
   const base = (process.env.CRM_META_URL || "https://crm.vakilkaro.com/meta-leads.php").trim();
   let key = "";
@@ -24,7 +24,9 @@ async function metaLeads(d, user, request) {
   }
   if (!key) return NextResponse.json({ error: "Facebook Leads is not set up in the CRM yet — open meta-leads.php in the CRM once." }, { status: 404 });
   const body = act === "map" ? { map: d.map || {} } : act === "sync" ? { since: d.since || "" } : act === "status" ? { fv: d.fv || "ads", refresh: Boolean(d.refresh), log: Number(d.log) || 150 }
-    : act === "audit" ? { src: d.src || "", who: d.who || "", act: d.act || "", from: d.from || "", to: d.to || "" } : {};
+    : act === "audit" ? { src: d.src || "", who: d.who || "", act: d.act || "", from: d.from || "", to: d.to || "" }
+    : act === "log" ? { camp: d.camp || "", stage: d.stage || "", staff: d.staff || "", res: d.res || "", q: d.q || "", from: d.from || "", to: d.to || "",
+                        page: Number(d.page) || 1, per: Number(d.per) || 50, options: Boolean(d.options) } : {};
   /* CRM ke Audit Log ke liye: panel me kaun login hai, kis IP / browser se */
   const actor = Buffer.from(JSON.stringify({
     name: user?.name || "Panel user", email: user?.email || "", role: user?.role_name || user?.role_key || "",
