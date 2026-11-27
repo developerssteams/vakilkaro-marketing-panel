@@ -14,6 +14,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { readRows } from "../lib/marketing-local";
 import { TablePager } from "./Pager";
+import { createPortal } from "react-dom";
 
 const CACHE = "vk_meta_hours";
 const PERIODS = [
@@ -1790,14 +1791,9 @@ export function MetaCrmTab({ tab }) {
                             <td><span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 700, borderRadius: 7, padding: "2px 8px", ...(String(f.status).toUpperCase() === "ACTIVE" ? { color: "#1E8A54", background: "#E8F6EE" } : { color: "#5B6478", background: "#F1F3F8" }) }}>{String(f.status || "").toLowerCase().replace(/^./, (c) => c.toUpperCase())}</span></td>
                             <td className="ta-r"><b>{num(f.leads)}</b></td>
                             <td>
-                              <label className={`st-sel${v !== (f.map || "auto") ? " on" : ""}`} style={{ width: "100%" }}><i className="fa-solid fa-scale-balanced" />
-                                <select value={v} onChange={(e) => setMap((m) => ({ ...m, [f.id]: e.target.value }))} aria-label={`Service for ${f.name}`} style={{ flex: 1, minWidth: 0 }}>
-                                  <option value="auto">Auto{f.auto ? ` (${f.auto})` : " (from campaign name)"}</option>
-                                  <option value="t:NGO Sale Purchase">NGO Sale Purchase</option>
-                                  {(d.services || []).map((s) => <option key={s.id} value={`s:${s.id}`}>{s.name}</option>)}
-                                  <option value="skip">— Skip (keep out of CRM) —</option>
-                                </select><i className="fa-solid fa-chevron-down st-cv" />
-                              </label>
+                              <SvcPick value={v} changed={v !== (f.map || "auto")} label={`Service for ${f.name}`} onChange={(nv) => setMap((m) => ({ ...m, [f.id]: nv }))}
+                                options={[{ id: "auto", label: `Auto${f.auto ? ` (${f.auto})` : " (from campaign name)"}` }, { id: "t:NGO Sale Purchase", label: "NGO Sale Purchase" },
+                                  ...(d.services || []).map((s) => ({ id: `s:${s.id}`, label: s.name })), { id: "skip", label: "— Skip (keep out of CRM) —" }]} />
                               {v !== (f.map || "auto") ? <small style={{ color: "#B7791F", fontWeight: 600 }}>Changed — press Save mapping{svcName(v) ? ` (${svcName(v)})` : ""}</small> : null}
                             </td>
                           </tr>
@@ -1870,5 +1866,80 @@ function MlAudit({ rows }) {
         </>
       ) : <div className="lf-empty"><i className="fa-solid fa-user-shield" /><b>Nothing here</b><span>{rows.length ? "No action matches the filters." : "No change has been made yet."}</span></div>}
     </section>
+  );
+}
+
+/* Ek service chuno — upar search box (lambi list me naam likh ke dhundo) */
+function SvcPick({ value, options, onChange, label, changed }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [hi, setHi] = useState(0);
+  const [pos, setPos] = useState(null);
+  const ref = useRef(null);
+  const popRef = useRef(null);
+  const listRef = useRef(null);
+  /* Table ke scroll box me list kat na jaaye — isliye screen ke hisaab se (fixed) kholte hain */
+  const place = () => {
+    const r = ref.current?.getBoundingClientRect(); if (!r) return;
+    const w = Math.min(420, window.innerWidth - 16);
+    const left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
+    const up = window.innerHeight - r.bottom < 380 && r.top > 380;
+    setPos(up ? { left, width: w, bottom: window.innerHeight - r.top + 6 } : { left, width: w, top: r.bottom + 6 });
+  };
+  useEffect(() => {
+    if (!open) return undefined;
+    place();
+    const inside = (t) => ref.current?.contains(t) || popRef.current?.contains(t);
+    const close = (e) => { if (!inside(e.target)) setOpen(false); };
+    const onScroll = (e) => { if (!inside(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", onScroll, true);
+    return () => { document.removeEventListener("mousedown", close); window.removeEventListener("resize", place); window.removeEventListener("scroll", onScroll, true); };
+  }, [open]);
+  useEffect(() => { if (!open) setQ(""); setHi(0); }, [open]);
+  const t = q.trim().toLowerCase();
+  const shown = t ? options.filter((o) => o.label.toLowerCase().includes(t)) : options;
+  const cur = options.find((o) => o.id === value);
+  const pick = (id) => { onChange(id); setOpen(false); };
+  const onKey = (e) => {
+    if (e.key === "Escape") setOpen(false);
+    else if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(h + 1, shown.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); if (shown[hi]) pick(shown[hi].id); }
+  };
+  useEffect(() => { const el = listRef.current?.children[hi]; if (el) el.scrollIntoView({ block: "nearest" }); }, [hi]);
+  return (
+    <div ref={ref} className={`st-sel${changed ? " on" : ""}`} style={{ padding: 0, width: "100%", position: "relative" }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={label}
+        style={{ display: "flex", alignItems: "center", gap: 8, height: "100%", width: "100%", padding: "0 30px 0 12px", border: 0, background: "transparent", cursor: "pointer", font: "600 13px var(--font)", color: "#1B2333", minWidth: 0, textAlign: "left" }}>
+        <i className="fa-solid fa-scale-balanced" style={{ fontSize: 12, color: "#646B7E" }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cur ? cur.label : value}</span>
+      </button>
+      <i className={`fa-solid fa-chevron-${open ? "up" : "down"} st-cv`} />
+      {open && pos ? createPortal(
+        <div ref={popRef} style={{ position: "fixed", ...pos, zIndex: 1000, background: "#fff", border: "1px solid #E3E6EF", borderRadius: 14, boxShadow: "0 18px 40px rgba(18,20,28,.16)", overflow: "hidden" }}>
+          <div style={{ padding: 10, borderBottom: "1px solid #EEF0F5" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, height: 36, padding: "0 10px", border: "1px solid #E3E6EF", borderRadius: 10, background: "#F8F9FC" }}>
+              <i className="fa-solid fa-magnifying-glass" style={{ fontSize: 11.5, color: "#959CAE" }} />
+              <input autoFocus value={q} onChange={(e) => { setQ(e.target.value); setHi(0); }} onKeyDown={onKey} placeholder="Search service — e.g. trademark, GST"
+                aria-label="Search service" style={{ flex: 1, border: 0, outline: "none", background: "transparent", font: "500 13px var(--font)", minWidth: 0 }} />
+              {q ? <button type="button" onClick={() => setQ("")} aria-label="Clear" style={{ border: 0, background: "none", cursor: "pointer", color: "#959CAE", padding: 0 }}><i className="fa-solid fa-xmark" /></button> : null}
+            </label>
+            <div style={{ marginTop: 6, fontSize: 11.5, color: "#5B6478", fontWeight: 600 }}>{t ? `${shown.length} of ${options.length}` : `${options.length} options`}</div>
+          </div>
+          <div ref={listRef} role="listbox" style={{ maxHeight: 300, overflowY: "auto", padding: 6 }}>
+            {shown.map((o, i) => (
+              <button type="button" key={o.id} role="option" aria-selected={o.id === value} onClick={() => pick(o.id)} onMouseEnter={() => setHi(i)}
+                style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "8px 10px", border: 0, borderRadius: 9, cursor: "pointer", font: "500 13px var(--font)", color: o.id === "skip" ? "#B42318" : "#1B2333", background: i === hi ? "#F4F5FA" : o.id === value ? "#FFF8E6" : "transparent" }}>
+                <span style={{ flex: 1, minWidth: 0 }}>{o.label}</span>
+                {o.id === value ? <i className="fa-solid fa-check" style={{ color: "#B7791F", fontSize: 12 }} /> : null}
+              </button>
+            ))}
+            {!shown.length ? <div style={{ padding: "18px 10px", textAlign: "center", color: "#959CAE", fontSize: 13 }}>No service matches “{q}”</div> : null}
+          </div>
+        </div>, document.body
+      ) : null}
+    </div>
   );
 }
