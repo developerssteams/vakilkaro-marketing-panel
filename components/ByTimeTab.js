@@ -1711,13 +1711,13 @@ export function MetaCrmTab({ tab }) {
           ) : null}
 
           <div className="st-filters">
-            {[["log", "fa-clock-rotate-left", `Leads log (${num(log.length)})`], ["forms", "fa-list-check", "Forms → service"]].map(([k, ic, l]) => (
+            {[["log", "fa-clock-rotate-left", `Leads log (${num(log.length)})`], ["forms", "fa-list-check", "Forms → service"], ["audit", "fa-user-shield", "Audit log"]].map(([k, ic, l]) => (
               <button type="button" key={k} onClick={() => { setView(k); if (k === "forms" && !(d.forms || []).length && d.page) load({ fv }); }}
                 className={`st-sel${view === k ? " on" : ""}`} style={{ cursor: "pointer", font: "inherit" }}><i className={`fa-solid ${ic}`} /> <b style={{ fontWeight: 700 }}>{l}</b></button>
             ))}
           </div>
 
-          {view === "log" ? (
+          {view === "audit" ? <MlAudit rows={d.audit || []} /> : view === "log" ? (
             <section className="card st-card">
               <div className="st-card-h">
                 <span className="lf-form-ic"><i className="fa-solid fa-clock-rotate-left" /></span>
@@ -1812,5 +1812,63 @@ export function MetaCrmTab({ tab }) {
         </>
       )}
     </div>
+  );
+}
+
+/* Facebook → CRM: kisne kya kiya (CRM / Marketing panel / cron) — CRM ki meta_lead_audit se */
+const ML_SRC = { crm: { l: "CRM", ic: "fa-building", c: "#B7791F", bg: "#FFF6E0" }, panel: { l: "Marketing Panel", ic: "fa-chart-line", c: "#7C3AED", bg: "#F2ECFE" }, cron: { l: "Cron (auto)", ic: "fa-clock", c: "#5B6478", bg: "#F1F3F8" } };
+const ML_ACT = { settings: "Settings / token", mapping: "Form mapping", sync: "Sync", subscribe: "Instant leads", verify: "Verify token" };
+function MlAudit({ rows }) {
+  const [src, setSrc] = useState("");
+  const [who, setWho] = useState("");
+  const [act, setAct] = useState("");
+  const [page, setPage] = useState(1);
+  const people = useMemo(() => [...new Set(rows.map((r) => r.actor_name).filter(Boolean))].sort(), [rows]);
+  const list = rows.filter((r) => (!src || r.source === src) && (!who || r.actor_name === who) && (!act || r.action === act));
+  useEffect(() => { setPage(1); }, [src, who, act]);
+  const pages = Math.max(1, Math.ceil(list.length / 25));
+  const cur = Math.min(page, pages);
+  const sel = (val, set, label, opts, icon) => (
+    <label className={`st-sel${val ? " on" : ""}`}><i className={`fa-solid ${icon}`} />
+      <select value={val} onChange={(e) => set(e.target.value)} aria-label={label}>{opts}</select><i className="fa-solid fa-chevron-down st-cv" /></label>
+  );
+  return (
+    <section className="card st-card">
+      <div className="st-card-h">
+        <span className="lf-form-ic"><i className="fa-solid fa-user-shield" /></span>
+        <div style={{ flex: 1, minWidth: 0 }}><b>Audit log</b><small>Who changed what — from the CRM, this panel or the automatic sync · latest {num(rows.length)}</small></div>
+        <button type="button" className="btn btn-ghost" disabled={!list.length} onClick={() => lrCsv("vakilkaro-facebook-leads-audit.csv", ["When", "Name", "Email", "Role", "From", "Action", "Details", "IP", "Device"],
+          list.map((r) => [r.created_at, r.actor_name, r.actor_email, r.actor_role, ML_SRC[r.source]?.l || r.source, r.title, r.detail, r.ip, r.device]))}><i className="fa-solid fa-file-csv" /> CSV</button>
+      </div>
+      <div className="st-filters" style={{ padding: "0 16px 10px" }}>
+        {sel(src, setSrc, "From where", [<option key="" value="">From anywhere</option>, ...Object.entries(ML_SRC).map(([k, v]) => <option key={k} value={k}>{v.l}</option>)], "fa-location-dot")}
+        {sel(who, setWho, "Who", [<option key="" value="">Everyone</option>, ...people.map((p) => <option key={p} value={p}>{p}</option>)], "fa-user")}
+        {sel(act, setAct, "What", [<option key="" value="">All actions</option>, ...Object.entries(ML_ACT).map(([k, v]) => <option key={k} value={k}>{v}</option>)], "fa-list")}
+      </div>
+      {list.length ? (
+        <>
+          <div className="tbl-scroll">
+            <table className="mod-table st-t">
+              <thead><tr><th>When</th><th>Who (account)</th><th>From</th><th>What</th><th>IP · device</th></tr></thead>
+              <tbody>
+                {list.slice((cur - 1) * 25, cur * 25).map((r) => {
+                  const s = ML_SRC[r.source] || { l: r.source, ic: "fa-circle", c: "#5B6478", bg: "#F1F3F8" };
+                  return (
+                    <tr key={r.id}>
+                      <td>{lrDate(r.created_at)}</td>
+                      <td><b>{r.actor_name || "—"}</b><small className="mut" style={{ display: "block" }}>{[r.actor_email, r.actor_role].filter(Boolean).join(" · ") || "—"}</small></td>
+                      <td><span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, color: s.c, background: s.bg, borderRadius: 7, padding: "2px 8px" }}><i className={`fa-solid ${s.ic}`} /> {s.l}</span></td>
+                      <td style={{ whiteSpace: "normal", minWidth: 240 }}><b>{r.title}</b>{r.detail ? <small className="mut" style={{ display: "block" }}>{r.detail}</small> : null}</td>
+                      <td><small className="mut">{[r.ip, r.device].filter(Boolean).join(" · ") || "—"}</small></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ padding: "0 18px 14px" }}><TablePager page={cur} pages={pages} total={list.length} onPage={setPage} perPage={25} /></div>
+        </>
+      ) : <div className="lf-empty"><i className="fa-solid fa-user-shield" /><b>Nothing here</b><span>{rows.length ? "No action matches the filters." : "No change has been made yet."}</span></div>}
+    </section>
   );
 }

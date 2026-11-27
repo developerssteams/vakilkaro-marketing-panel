@@ -14,8 +14,8 @@ export const maxDuration = 60;
 /* Facebook Leads → CRM (CRM ki meta-leads.php) — panel usi file ke JSON API se
    status / form mapping / sync / subscribe karta hai. Key = CRM ki cron key
    (CRM ke database ki app_settings se), isliye panel me alag se kuch nahi daalna. */
-async function metaLeads(d) {
-  const allowed = ["status", "map", "sync", "subscribe"];
+async function metaLeads(d, user, request) {
+  const allowed = ["status", "map", "sync", "subscribe", "audit"];
   const act = allowed.includes(d.meta) ? d.meta : "status";
   const base = (process.env.CRM_META_URL || "https://crm.vakilkaro.com/meta-leads.php").trim();
   let key = "";
@@ -23,12 +23,19 @@ async function metaLeads(d) {
     return NextResponse.json({ error: err?.message || "Could not read CRM settings" }, { status: 502 });
   }
   if (!key) return NextResponse.json({ error: "Facebook Leads is not set up in the CRM yet — open meta-leads.php in the CRM once." }, { status: 404 });
-  const body = act === "map" ? { map: d.map || {} } : act === "sync" ? { since: d.since || "" } : act === "status" ? { fv: d.fv || "ads", refresh: Boolean(d.refresh), log: Number(d.log) || 150 } : {};
+  const body = act === "map" ? { map: d.map || {} } : act === "sync" ? { since: d.since || "" } : act === "status" ? { fv: d.fv || "ads", refresh: Boolean(d.refresh), log: Number(d.log) || 150 }
+    : act === "audit" ? { src: d.src || "", who: d.who || "", act: d.act || "", from: d.from || "", to: d.to || "" } : {};
+  /* CRM ke Audit Log ke liye: panel me kaun login hai, kis IP / browser se */
+  const actor = Buffer.from(JSON.stringify({
+    name: user?.name || "Panel user", email: user?.email || "", role: user?.role_name || user?.role_key || "",
+    ip: (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || request.headers.get("x-real-ip") || "",
+    ua: request.headers.get("user-agent") || "",
+  })).toString("base64");
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 55000);
   try {
     const r = await fetch(`${base}?api=${act}`, {
-      method: "POST", headers: { "Content-Type": "application/json", "X-ML-Key": key }, body: JSON.stringify(body),
+      method: "POST", headers: { "Content-Type": "application/json", "X-ML-Key": key, "X-ML-Actor": actor }, body: JSON.stringify(body),
       cache: "no-store", signal: ctrl.signal,
     });
     const txt = await r.text();
@@ -56,7 +63,7 @@ export async function POST(request) {
   let d = {};
   try { d = await request.json(); } catch { d = {}; }
 
-  if (d.meta) return metaLeads(d);
+  if (d.meta) return metaLeads(d, user, request);
 
   /* Lead Report — ek date range ki saari CRM leads aur unka abhi ka stage */
   if (d.report) {
