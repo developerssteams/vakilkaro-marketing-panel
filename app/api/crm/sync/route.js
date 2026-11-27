@@ -26,7 +26,7 @@ async function metaLeads(d, user, request) {
   const body = act === "map" ? { map: d.map || {} } : act === "sync" ? { since: d.since || "" } : act === "status" ? { fv: d.fv || "ads", refresh: Boolean(d.refresh), log: Number(d.log) || 150 }
     : act === "audit" ? { src: d.src || "", who: d.who || "", act: d.act || "", from: d.from || "", to: d.to || "" }
     : act === "log" ? { camp: d.camp || "", stage: d.stage || "", staff: d.staff || "", res: d.res || "", q: d.q || "", from: d.from || "", to: d.to || "",
-                        page: Number(d.page) || 1, per: Number(d.per) || 50, options: Boolean(d.options) } : {};
+                        page: Number(d.page) || 1, per: Number(d.per) || 50, options: Boolean(d.options), all: Boolean(d.all) } : {};
   /* CRM ke Audit Log ke liye: panel me kaun login hai, kis IP / browser se */
   const actor = Buffer.from(JSON.stringify({
     name: user?.name || "Panel user", email: user?.email || "", role: user?.role_name || user?.role_key || "",

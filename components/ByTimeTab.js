@@ -1834,6 +1834,8 @@ function SvcPick({ value, options, onChange, label, changed, icon = "fa-scale-ba
   const ref = useRef(null);
   const popRef = useRef(null);
   const listRef = useRef(null);
+  const inRef = useRef(null);
+  useEffect(() => { if (open && pos) { const t = setTimeout(() => inRef.current?.focus({ preventScroll: true }), 0); return () => clearTimeout(t); } return undefined; }, [open, !!pos]);
   /* Table ke scroll box me list kat na jaaye — isliye screen ke hisaab se (fixed) kholte hain */
   const place = () => {
     const r = ref.current?.getBoundingClientRect(); if (!r) return;
@@ -1847,7 +1849,8 @@ function SvcPick({ value, options, onChange, label, changed, icon = "fa-scale-ba
     place();
     const inside = (t) => ref.current?.contains(t) || popRef.current?.contains(t);
     const close = (e) => { if (!inside(e.target)) setOpen(false); };
-    const onScroll = (e) => { if (!inside(e.target)) setOpen(false); };
+    /* page scroll ho to list button ke saath chale (band nahi) */
+    const onScroll = (e) => { if (!popRef.current?.contains(e.target)) place(); };
     document.addEventListener("mousedown", close);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", onScroll, true);
@@ -1874,11 +1877,11 @@ function SvcPick({ value, options, onChange, label, changed, icon = "fa-scale-ba
       </button>
       <i className={`fa-solid fa-chevron-${open ? "up" : "down"} st-cv`} />
       {open && pos ? createPortal(
-        <div ref={popRef} style={{ position: "fixed", ...pos, zIndex: 1000, background: "#fff", border: "1px solid #E3E6EF", borderRadius: 14, boxShadow: "0 18px 40px rgba(18,20,28,.16)", overflow: "hidden" }}>
+        <div ref={popRef} data-svcpick-pop="1" style={{ position: "fixed", ...pos, zIndex: 1000, background: "#fff", border: "1px solid #E3E6EF", borderRadius: 14, boxShadow: "0 18px 40px rgba(18,20,28,.16)", overflow: "hidden" }}>
           <div style={{ padding: 10, borderBottom: "1px solid #EEF0F5" }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8, height: 36, padding: "0 10px", border: "1px solid #E3E6EF", borderRadius: 10, background: "#F8F9FC" }}>
               <i className="fa-solid fa-magnifying-glass" style={{ fontSize: 11.5, color: "#959CAE" }} />
-              <input autoFocus value={q} onChange={(e) => { setQ(e.target.value); setHi(0); }} onKeyDown={onKey} placeholder={placeholder}
+              <input ref={inRef} value={q} onChange={(e) => { setQ(e.target.value); setHi(0); }} onKeyDown={onKey} placeholder={placeholder}
                 aria-label={placeholder} style={{ flex: 1, border: 0, outline: "none", background: "transparent", font: "500 13px var(--font)", minWidth: 0 }} />
               {q ? <button type="button" onClick={() => setQ("")} aria-label="Clear" style={{ border: 0, background: "none", cursor: "pointer", color: "#959CAE", padding: 0 }}><i className="fa-solid fa-xmark" /></button> : null}
             </label>
@@ -1914,9 +1917,19 @@ function MlLog({ call, reloadKey }) {
   const [r, setR] = useState(null);
   const [opts, setOpts] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [exp, setExp] = useState(false);
   const [err, setErr] = useState("");
   const [qIn, setQIn] = useState("");
+  const [open, setOpen] = useState(false);
+  const popRef = useRef(null);
   useEffect(() => { const t = setTimeout(() => setF((x) => (x.q === qIn.trim() ? x : { ...x, q: qIn.trim() })), 400); return () => clearTimeout(t); }, [qIn]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (popRef.current && !popRef.current.contains(e.target) && !e.target.closest?.("[data-svcpick-pop]")) setOpen(false); };
+    const esc = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", close); document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+  }, [open]);
   const dates = useMemo(() => {
     if (!range) return { from: "", to: "" };
     if (range === "custom") return { from: cf, to: ct };
@@ -1937,45 +1950,99 @@ function MlLog({ call, reloadKey }) {
     return () => { off = true; };
   }, [f, dates.from, dates.to, page, per, reloadKey]);
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v }));
-  const any = f.camp || f.stage || f.staff || f.res || f.q || range;
+  const nF = [f.camp, f.stage, f.staff, range].filter(Boolean).length;
   const rows = r?.rows || [];
+  const counts = r?.counts || {};
+  const allN = Object.values(counts).reduce((a, n) => a + n, 0);
   const inputStyle = { flex: 1, minWidth: 0, border: 0, outline: "none", background: "transparent", font: "600 13px var(--font)", color: "#1B2333" };
-  const pickOpts = (list, none) => [{ id: "", label: "All" }, ...(none ? [{ id: "__none", label: none }] : []), ...(list || []).map((v) => ({ id: v, label: v }))];
-  function exportPage() {
-    lrCsv(`vakilkaro-facebook-leads-log${dates.from ? `-${dates.from}-to-${dates.to}` : ""}-page${r?.page || 1}.csv`, ["Came at", "Name", "Phone", "Platform", "Campaign", "Ad set", "Ad", "Form", "Result", "Note", "CRM lead ID", "Stage now", "Staff", "Service", "Via"],
-      rows.map((x) => [x.created_time || x.created_at, x.name, x.phone, mlPlat(x.platform), x.campaign, x.adset, x.ad, x.form_name, ML_ST[x.status]?.l || x.status, x.note, x.lead_id || "", x.stage || "", x.staff || "", x.service || "", x.via]));
+  const pickOpts = (list, none, ph) => [{ id: "", label: ph }, ...(none ? [{ id: "__none", label: none }] : []), ...(list || []).map((v) => ({ id: v, label: v }))];
+  const csvRow = (x) => [x.created_time || x.created_at, x.name, x.phone, mlPlat(x.platform), x.campaign, x.adset, x.ad, x.form_name, ML_ST[x.status]?.l || x.status, x.note, x.lead_id || "", x.stage || "", x.staff || "", x.service || "", x.via];
+  async function exportAll() {
+    setExp(true); setErr("");
+    try {
+      const j = await call("log", { ...f, ...dates, all: true });
+      lrCsv(`vakilkaro-facebook-leads${dates.from ? `-${dates.from}-to-${dates.to}` : ""}.csv`, ["Came at", "Name", "Phone", "Platform", "Campaign", "Ad set", "Ad", "Form", "Result", "Note", "CRM lead ID", "Stage now", "Staff", "Service", "Via"], (j.rows || []).map(csvRow));
+    } catch (e) { setErr(e.message); }
+    finally { setExp(false); }
   }
+  const clearAll = () => { setF({ camp: "", stage: "", staff: "", res: "", q: "" }); setQIn(""); setRange(""); };
+  const pill = (txt, onX) => (
+    <button type="button" onClick={onX} title="Remove" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, background: "#fff", border: "1px solid #F1D9A0", fontSize: 12, color: "#6A5310", cursor: "pointer", font: "inherit" }}>
+      {txt} <i className="fa-solid fa-xmark" style={{ fontSize: 10, color: "#B7791F" }} />
+    </button>
+  );
+  const chip = (k, label, n) => {
+    const on = f.res === k;
+    return (
+      <button type="button" key={k || "all"} onClick={() => set("res")(k)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 999, border: `1px solid ${on ? "#1B2333" : "#E3E6EF"}`, background: on ? "#1B2333" : "#fff", color: on ? "#fff" : "#5B6478", fontSize: 12, fontWeight: 700, cursor: "pointer", font: "inherit", whiteSpace: "nowrap" }}>
+        {label} <i style={{ fontStyle: "normal", fontSize: 11, borderRadius: 999, padding: "1px 7px", background: on ? "rgba(255,255,255,.18)" : "#F1F3F8" }}>{num(n || 0)}</i>
+      </button>
+    );
+  };
   return (
-    <section className="card st-card">
+    <section className="card st-card" style={{ overflow: "visible" }}>
       <div className="st-card-h">
         <span className="lf-form-ic"><i className="fa-solid fa-clock-rotate-left" /></span>
-        <div style={{ flex: 1, minWidth: 0 }}><b>Leads log</b><small>{r ? `${num(r.total)} leads${any ? " match the filters" : ""}` : "Loading..."} · campaign, ad set, form and where the lead is in the CRM now</small></div>
+        <div style={{ flex: 1, minWidth: 0 }}><b>Leads log</b><small>{r ? `${num(r.total)} leads${nF || f.q || f.res ? " match the filters" : ""}` : "Loading..."} · campaign, ad set, form and where the lead is in the CRM now</small></div>
         {busy ? <i className="fa-solid fa-spinner fa-spin" style={{ color: "#959CAE" }} /> : null}
-        <button type="button" className="btn btn-ghost" onClick={exportPage} disabled={!rows.length}><i className="fa-solid fa-file-csv" /> CSV (this page)</button>
       </div>
-      <div className="st-filters" style={{ padding: "0 16px 10px" }}>
-        <label className={`st-sel wide${qIn ? " on" : ""}`} style={{ paddingRight: 10 }}><i className="fa-solid fa-magnifying-glass" />
-          <input value={qIn} onChange={(e) => setQIn(e.target.value)} placeholder="Name, phone, ad set, form" aria-label="Search log" style={inputStyle} /></label>
-        <div style={{ minWidth: 220 }}><MlPickF icon="fa-bullhorn" ph="All campaigns" value={f.camp} onChange={set("camp")} options={pickOpts(opts?.campaigns, "No campaign")} label="Campaign" /></div>
-        <div style={{ minWidth: 180 }}><MlPickF icon="fa-flag" ph="All stages" value={f.stage} onChange={set("stage")} options={pickOpts(opts?.stages, "Not created in CRM")} label="Stage" /></div>
-        <div style={{ minWidth: 180 }}><MlPickF icon="fa-user-tie" ph="All staff" value={f.staff} onChange={set("staff")} options={pickOpts(opts?.staff, "Unassigned")} label="Staff" /></div>
-        <label className={`st-sel${f.res ? " on" : ""}`}><i className="fa-solid fa-filter" />
-          <select value={f.res} onChange={(e) => set("res")(e.target.value)} aria-label="Result">
-            <option value="">All results</option>
-            {Object.entries(ML_ST).map(([k, v]) => <option key={k} value={k}>{v.l}</option>)}
-          </select><i className="fa-solid fa-chevron-down st-cv" /></label>
-        <label className={`st-sel${range ? " on" : ""}`}><i className="fa-regular fa-calendar" />
-          <select value={range} onChange={(e) => { const k = e.target.value; if (k === "custom" && !cf) { const x = lrRange("7"); setCf(x.from); setCt(x.to); } setRange(k); }} aria-label="Date">
-            {ML_RANGES.map((x) => <option key={x.k} value={x.k}>{x.l}</option>)}
-          </select><i className="fa-solid fa-chevron-down st-cv" /></label>
-        {range === "custom" ? (
-          <>
-            <label className="st-sel" style={{ paddingRight: 12 }}><span style={{ fontSize: 12, color: "#646B7E", fontWeight: 600 }}>From</span><input type="date" value={cf} max={ct || undefined} onChange={(e) => setCf(e.target.value)} aria-label="From date" style={inputStyle} /></label>
-            <label className="st-sel" style={{ paddingRight: 12 }}><span style={{ fontSize: 12, color: "#646B7E", fontWeight: 600 }}>To</span><input type="date" value={ct} min={cf || undefined} onChange={(e) => setCt(e.target.value)} aria-label="To date" style={inputStyle} /></label>
-          </>
-        ) : dates.from ? <span className="lf-at">{lrShort(dates.from)}{dates.from !== dates.to ? ` – ${lrShort(dates.to)}` : ""}</span> : null}
-        {any ? <button type="button" className="ph-clear" onClick={() => { setF({ camp: "", stage: "", staff: "", res: "", q: "" }); setQIn(""); setRange(""); }}>Clear all</button> : null}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "0 16px 12px" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: "1 1 auto" }}>
+          {chip("", "All", allN)}
+          {Object.entries(ML_ST).filter(([k]) => counts[k] || f.res === k).map(([k, v]) => chip(k, v.l, counts[k]))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+          <label className={`st-sel${qIn ? " on" : ""}`} style={{ paddingRight: 10, minWidth: 250 }}><i className="fa-solid fa-magnifying-glass" />
+            <input type="search" value={qIn} onChange={(e) => setQIn(e.target.value)} placeholder="Search name, phone, ad set, form…" aria-label="Search log" style={inputStyle} /></label>
+          <div ref={popRef} style={{ position: "relative" }}>
+            <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} title="Filter leads" aria-label="Filter leads"
+              style={{ position: "relative", width: 40, height: 40, borderRadius: 10, border: `1px solid ${nF ? "#1B2333" : "#D6DAE6"}`, background: nF ? "#1B2333" : "#fff", color: nF ? "#fff" : "#646B7E", cursor: "pointer", fontSize: 14 }}>
+              <i className="fa-solid fa-sliders" />
+              {nF ? <span style={{ position: "absolute", top: -6, right: -6, minWidth: 18, height: 18, borderRadius: 999, background: "#E8A81C", color: "#fff", fontSize: 10.5, fontWeight: 800, display: "grid", placeItems: "center", border: "2px solid #fff" }}>{nF}</span> : null}
+            </button>
+            {open ? (
+              <div style={{ position: "absolute", right: 0, top: 46, zIndex: 80, width: "min(340px, 88vw)", background: "#fff", border: "1px solid #E3E6EF", borderRadius: 12, boxShadow: "0 12px 32px rgba(16,16,24,.14)", padding: 14 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 11 }}>Filter leads</div>
+                <div className="ml-fl">Date</div>
+                <label className={`st-sel${range ? " on" : ""}`} style={{ width: "100%", marginBottom: 8 }}><i className="fa-regular fa-calendar" />
+                  <select value={range} onChange={(e) => { const k = e.target.value; if (k === "custom" && !cf) { const x = lrRange("7"); setCf(x.from); setCt(x.to); } setRange(k); }} aria-label="Date" style={{ flex: 1 }}>
+                    {ML_RANGES.map((x) => <option key={x.k} value={x.k}>{x.l}</option>)}
+                  </select><i className="fa-solid fa-chevron-down st-cv" /></label>
+                {range === "custom" ? (
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <label className="st-sel" style={{ flex: 1, paddingRight: 8 }}><input type="date" value={cf} max={ct || undefined} onChange={(e) => setCf(e.target.value)} aria-label="From date" style={inputStyle} /></label>
+                    <label className="st-sel" style={{ flex: 1, paddingRight: 8 }}><input type="date" value={ct} min={cf || undefined} onChange={(e) => setCt(e.target.value)} aria-label="To date" style={inputStyle} /></label>
+                  </div>
+                ) : null}
+                <div className="ml-fl">Campaign</div>
+                <div style={{ marginBottom: 8 }}><MlPickF icon="fa-bullhorn" ph="All campaigns" value={f.camp} onChange={set("camp")} options={pickOpts(opts?.campaigns, "No campaign", "All campaigns")} label="Campaign" /></div>
+                <div className="ml-fl">Pipeline stage (in CRM now)</div>
+                <div style={{ marginBottom: 8 }}><MlPickF icon="fa-flag" ph="All stages" value={f.stage} onChange={set("stage")} options={pickOpts(opts?.stages, "Not created in CRM", "All stages")} label="Stage" /></div>
+                <div className="ml-fl">Staff</div>
+                <div style={{ marginBottom: 10 }}><MlPickF icon="fa-user-tie" ph="All staff" value={f.staff} onChange={set("staff")} options={pickOpts(opts?.staff, "Unassigned", "All staff")} label="Staff" /></div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, borderTop: "1px solid #F2F2F6", paddingTop: 11 }}>
+                  <span style={{ marginRight: "auto", fontSize: 11.5, fontWeight: 700, color: "#8A6D0B" }}><b>{num(r?.total || 0)}</b> leads match</span>
+                  <button type="button" onClick={clearAll} style={{ background: "#F4F4F8", color: "#646B7E", border: 0, borderRadius: 8, padding: "8px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Clear</button>
+                  <button type="button" onClick={() => setOpen(false)} style={{ background: "#1B2333", color: "#fff", border: 0, borderRadius: 8, padding: "8px 15px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Done</button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <button type="button" className="btn btn-gold" onClick={exportAll} disabled={exp || !r?.total} title="Download every lead that matches the filters and search">
+            <i className={`fa-solid ${exp ? "fa-spinner fa-spin" : "fa-download"}`} /> {exp ? "Preparing..." : `Export ${num(r?.total || 0)}`}
+          </button>
+        </div>
       </div>
+      {nF ? (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "10px 16px", borderTop: "1px solid #EEF0F5", background: "#FFFCF3" }}>
+          {range ? pill(<>Date: <b>{dates.from ? `${lrShort(dates.from)}${dates.from !== dates.to ? ` – ${lrShort(dates.to)}` : ""}` : "—"}</b></>, () => setRange("")) : null}
+          {f.camp ? pill(<>Campaign: <b>{f.camp === "__none" ? "No campaign" : f.camp}</b></>, () => set("camp")("")) : null}
+          {f.stage ? pill(<>Stage: <b>{f.stage === "__none" ? "Not created in CRM" : f.stage}</b></>, () => set("stage")("")) : null}
+          {f.staff ? pill(<>Staff: <b>{f.staff === "__none" ? "Unassigned" : f.staff}</b></>, () => set("staff")("")) : null}
+          <button type="button" className="ph-clear" onClick={clearAll}>Clear all</button>
+        </div>
+      ) : null}
+      <style>{".ml-fl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#959CAE;font-weight:800;margin-bottom:4px}"}</style>
       {err ? <div className="lf-err" style={{ margin: "0 16px 10px" }}><i className="fa-solid fa-triangle-exclamation" /> {err}</div> : null}
       {rows.length ? (
         <>
@@ -2009,7 +2076,7 @@ function MlLog({ call, reloadKey }) {
               <select value={per} onChange={(e) => setPer(Number(e.target.value))} aria-label="Per page">{[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n}</option>)}</select><i className="fa-solid fa-chevron-down st-cv" /></label>
           </div>
         </>
-      ) : <div className="lf-empty"><i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-inbox"}`} /><b>{busy ? "Loading..." : "No leads"}</b><span>{busy ? "Reading the log from the CRM." : any ? "Nothing matches these filters." : "No Facebook lead has come in yet."}</span></div>}
+      ) : <div className="lf-empty"><i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-inbox"}`} /><b>{busy ? "Loading..." : "No leads"}</b><span>{busy ? "Reading the log from the CRM." : nF || f.q || f.res ? "Nothing matches these filters." : "No Facebook lead has come in yet."}</span></div>}
     </section>
   );
 }
