@@ -788,6 +788,7 @@ export function LeadReport() {
   const [camps, setCamps] = useState([]);
   const [pipe, setPipe] = useState("");
   const [view, setView] = useState("created");    /* created · reeng (dobara aayi) · store (store room) */
+  const [plabel, setPlabel] = useState("");       /* proposal label: red · green · none */
   const [group, setGroup] = useState("month");
   const [asPct, setAsPct] = useState(false);
   const [page, setPage] = useState(1);
@@ -809,6 +810,7 @@ export function LeadReport() {
         source: at("source", a[8]), campaign: at("campaign", a[9]), pipeline: at("pipeline", a[10]),
         deal: Number(a[11]) || 0, updated: a[12], city: a[13], state: at("state", a[14]),
         store: a[15] === 1, reengTotal: Number(a[16]) || 0,
+        plabel: a[17] === "red" || a[17] === "green" ? a[17] : "",
       });
       const rows = (j.rows || []).map(dec);
       const extra = (j.extraRows || []).map(dec);
@@ -824,14 +826,14 @@ export function LeadReport() {
       const withRe = (r) => { const o = re.get(String(r.id)); return o ? { ...r, reengIn: o.times, reengAt: o.at, reengSrc: o.src, reengSvc: o.svc } : { ...r, reengIn: 0, reengAt: "" }; };
       /* Store room: sirf wo jo chuni dates me store me daali gayi (aur abhi bhi store me hain) */
       const inRange = (d) => { const x = String(d || "").slice(0, 10); return x >= R.from && x <= R.to; };
-      const storeAll = (j.storeRows || []).map((a) => ({ ...dec(a), store: true, storeAt: a[17] || "" }));
+      const storeAll = (j.storeRows || []).map((a) => ({ ...dec(a), store: true, storeAt: a[18] || "" }));
       const store = storeAll.filter((r) => inRange(r.storeAt));
       setData({ ...j, rows: rows.map(withRe), extra: extra.map(withRe), store: store.map(withRe), reengEvents: (j.reeng || []).length });
     } catch { setErr("Could not reach the server"); }
     finally { setBusy(false); }
   }
   useEffect(() => { if (period !== "custom") load(); }, [period]);
-  useEffect(() => { setPage(1); }, [q, kw, stages, services, staff, sources, camps, pipe, view, data]);
+  useEffect(() => { setPage(1); }, [q, kw, stages, services, staff, sources, camps, pipe, view, plabel, data]);
 
   const v = useMemo(() => {
     if (!data) return null;
@@ -849,6 +851,7 @@ export function LeadReport() {
     const tDigits = t.replace(/\D/g, "");
     const pre = all.filter((r) => {
       if (pipe && r.pipeline !== pipe) return false;
+      if (plabel && (plabel === "none" ? r.plabel : r.plabel !== plabel)) return false;
       if (services.length && !services.includes(r.service)) return false;
       if (staff.length && !staff.includes(r.staff)) return false;
       if (sources.length && !sources.includes(r.source)) return false;
@@ -907,11 +910,11 @@ export function LeadReport() {
       all, pre, base, list, stageCards, won, lost, wonVal, reengN, reengTimes, reengAll: reengList.length, groups, cols, totBy, label,
       opts: { service: uniq("service"), staff: uniq("staff"), source: uniq("source"), campaign: uniq("campaign"), pipeline: uniq("pipeline") },
     };
-  }, [data, q, kw, stages, services, staff, sources, camps, pipe, group, view]);
+  }, [data, q, kw, stages, services, staff, sources, camps, pipe, group, view, plabel]);
 
   const toggleStage = (k) => setStages((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
-  const anyFilter = q || kw || stages.length || services.length || staff.length || sources.length || camps.length || pipe;
-  const clearAll = () => { setQ(""); setKw(""); setStages([]); setServices([]); setStaff([]); setSources([]); setCamps([]); setPipe(""); };
+  const anyFilter = q || kw || stages.length || services.length || staff.length || sources.length || camps.length || pipe || plabel;
+  const clearAll = () => { setQ(""); setKw(""); setStages([]); setServices([]); setStaff([]); setSources([]); setCamps([]); setPipe(""); setPlabel(""); };
   const opt = (arr) => arr.map(([k, n]) => ({ id: k, label: `${k} (${num(n)})` }));
   const pages = v ? Math.max(1, Math.ceil(v.list.length / LR_PER)) : 1;
   const cur = Math.min(page, pages);
@@ -920,8 +923,8 @@ export function LeadReport() {
 
   function exportLeads() {
     lrCsv(`vakilkaro-${view === "reeng" ? "reengaged-leads" : view === "store" ? "store-room-leads" : "lead-report"}-${tag}.csv`,
-      ["Lead ID", "Created", "Name", "Phone", "Email", "Service", "Stage", "Store room", "Pipeline", "Staff", "Source", "Campaign", "Deal value", "City", "State", "Last updated", "Re-engaged in these dates", "Last re-engaged", "Re-engaged (all time)", "In store since"],
-      v.list.map((r) => [r.id, r.created, r.name, r.phone, r.email, r.service, r.stage, r.store ? "Yes" : "", r.pipeline, r.staff, r.source, r.campaign, r.deal || "", r.city, r.state, r.updated, r.reengIn || "", r.reengAt || "", r.reengTotal || "", r.storeAt || ""]));
+      ["Lead ID", "Created", "Name", "Phone", "Email", "Service", "Stage", "Store room", "Pipeline", "Staff", "Source", "Campaign", "Deal value", "City", "State", "Last updated", "Re-engaged in these dates", "Last re-engaged", "Re-engaged (all time)", "In store since", "Proposal label"],
+      v.list.map((r) => [r.id, r.created, r.name, r.phone, r.email, r.service, r.stage, r.store ? "Yes" : "", r.pipeline, r.staff, r.source, r.campaign, r.deal || "", r.city, r.state, r.updated, r.reengIn || "", r.reengAt || "", r.reengTotal || "", r.storeAt || "", r.plabel === "red" ? "Red label" : r.plabel === "green" ? "Green label" : ""]));
   }
   function exportBreakdown() {
     const g = LR_GROUPS.find((x) => x.key === group)?.label || "Group";
@@ -986,6 +989,14 @@ export function LeadReport() {
               </select><i className="fa-solid fa-chevron-down st-cv" />
             </label>
           ) : null}
+          <label className={`st-sel${plabel ? " on" : ""}`}><i className="fa-solid fa-tag" style={plabel === "red" ? { color: "#C0392B" } : plabel === "green" ? { color: "#12813F" } : undefined} />
+            <select value={plabel} onChange={(e) => setPlabel(e.target.value)} aria-label="Proposal label">
+              <option value="">All proposal labels</option>
+              <option value="red">🔴 Red label — only asked for proposal</option>
+              <option value="green">🟢 Green label — client interested</option>
+              <option value="none">No label</option>
+            </select><i className="fa-solid fa-chevron-down st-cv" />
+          </label>
           {anyFilter ? <button type="button" className="ph-clear" onClick={clearAll}>Clear all</button> : null}
         </div>
       ) : null}
@@ -1101,6 +1112,7 @@ export function LeadReport() {
                             <td>{r.phone || <span className="mut">—</span>}{r.email ? <small className="mut" style={{ display: "block" }}>{r.email}</small> : null}</td>
                             <td style={{ whiteSpace: "normal", minWidth: 160 }}>{r.service || <span className="mut">—</span>}</td>
                             <td><span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 700, color: tone.c, background: tone.bg, borderRadius: 7, padding: "2px 8px" }}>{r.stage}</span>
+                              {r.plabel ? <PlBadge v={r.plabel} /> : null}
                               {r.store ? <span style={{ display: "inline-block", marginLeft: 4, fontSize: 11, fontWeight: 700, color: "#B7791F", background: "#FFF6E0", borderRadius: 7, padding: "2px 7px" }}><i className="fa-solid fa-box-archive" /> Store room</span> : null}
                               {r.reengIn ? <span title={`${r.reengIn} time(s) in these dates${r.reengSvc ? ` · asked about ${r.reengSvc}` : ""}`} style={{ display: "inline-block", marginLeft: 4, fontSize: 11, fontWeight: 700, color: "#D33F49", background: "#FDECEE", borderRadius: 7, padding: "2px 7px" }}><i className="fa-solid fa-rotate-left" /> Re-engaged{r.reengIn > 1 ? ` ×${r.reengIn}` : ""}</span> : null}
                               {r.pipeline ? <small className="mut" style={{ display: "block" }}>{r.pipeline}</small> : null}</td>
@@ -1909,7 +1921,7 @@ const ML_RANGES = [
   { k: "month", l: "This month" }, { k: "lastmonth", l: "Last month" }, { k: "30", l: "Last 30 days" }, { k: "custom", l: "Custom dates" },
 ];
 function MlLog({ call, reloadKey }) {
-  const [f, setF] = useState({ camp: "", stage: "", staff: "", res: "", q: "" });
+  const [f, setF] = useState({ camp: "", stage: "", staff: "", plabel: "", res: "", q: "" });
   const [range, setRange] = useState("");
   const [cf, setCf] = useState(""); const [ct, setCt] = useState("");
   const [page, setPage] = useState(1);
@@ -1950,22 +1962,22 @@ function MlLog({ call, reloadKey }) {
     return () => { off = true; };
   }, [f, dates.from, dates.to, page, per, reloadKey]);
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v }));
-  const nF = [f.camp, f.stage, f.staff, range].filter(Boolean).length;
+  const nF = [f.camp, f.stage, f.staff, f.plabel, range].filter(Boolean).length;
   const rows = r?.rows || [];
   const counts = r?.counts || {};
   const allN = Object.values(counts).reduce((a, n) => a + n, 0);
   const inputStyle = { flex: 1, minWidth: 0, border: 0, outline: "none", background: "transparent", font: "600 13px var(--font)", color: "#1B2333" };
   const pickOpts = (list, none, ph) => [{ id: "", label: ph }, ...(none ? [{ id: "__none", label: none }] : []), ...(list || []).map((v) => ({ id: v, label: v }))];
-  const csvRow = (x) => [x.created_time || x.created_at, x.name, x.phone, mlPlat(x.platform), x.campaign, x.adset, x.ad, x.form_name, ML_ST[x.status]?.l || x.status, x.note, x.lead_id || "", x.stage || "", x.staff || "", x.service || "", x.via];
+  const csvRow = (x) => [x.created_time || x.created_at, x.name, x.phone, mlPlat(x.platform), x.campaign, x.adset, x.ad, x.form_name, ML_ST[x.status]?.l || x.status, x.note, x.lead_id || "", x.stage || "", PL_TXT[x.prop_label] || "", x.staff || "", x.service || "", x.via];
   async function exportAll() {
     setExp(true); setErr("");
     try {
       const j = await call("log", { ...f, ...dates, all: true });
-      lrCsv(`vakilkaro-facebook-leads${dates.from ? `-${dates.from}-to-${dates.to}` : ""}.csv`, ["Came at", "Name", "Phone", "Platform", "Campaign", "Ad set", "Ad", "Form", "Result", "Note", "CRM lead ID", "Stage now", "Staff", "Service", "Via"], (j.rows || []).map(csvRow));
+      lrCsv(`vakilkaro-facebook-leads${dates.from ? `-${dates.from}-to-${dates.to}` : ""}.csv`, ["Came at", "Name", "Phone", "Platform", "Campaign", "Ad set", "Ad", "Form", "Result", "Note", "CRM lead ID", "Stage now", "Proposal label", "Staff", "Service", "Via"], (j.rows || []).map(csvRow));
     } catch (e) { setErr(e.message); }
     finally { setExp(false); }
   }
-  const clearAll = () => { setF({ camp: "", stage: "", staff: "", res: "", q: "" }); setQIn(""); setRange(""); };
+  const clearAll = () => { setF({ camp: "", stage: "", staff: "", plabel: "", res: "", q: "" }); setQIn(""); setRange(""); };
   const pill = (txt, onX) => (
     <button type="button" onClick={onX} title="Remove" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, background: "#fff", border: "1px solid #F1D9A0", fontSize: 12, color: "#6A5310", cursor: "pointer", font: "inherit" }}>
       {txt} <i className="fa-solid fa-xmark" style={{ fontSize: 10, color: "#B7791F" }} />
@@ -2018,6 +2030,17 @@ function MlLog({ call, reloadKey }) {
                 <div style={{ marginBottom: 8 }}><MlPickF icon="fa-bullhorn" ph="All campaigns" value={f.camp} onChange={set("camp")} options={pickOpts(opts?.campaigns, "No campaign", "All campaigns")} label="Campaign" /></div>
                 <div className="ml-fl">Pipeline stage (in CRM now)</div>
                 <div style={{ marginBottom: 8 }}><MlPickF icon="fa-flag" ph="All stages" value={f.stage} onChange={set("stage")} options={pickOpts(opts?.stages, "Not created in CRM", "All stages")} label="Stage" /></div>
+                <div className="ml-fl">Proposal label</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                  {[["", "All"], ["red", "Red label"], ["green", "Green label"], ["__none", "No label"]].map(([k, l]) => {
+                    const on = f.plabel === k; const c = k === "red" ? "#C0392B" : k === "green" ? "#12813F" : "#1B2333";
+                    return (
+                      <button type="button" key={k || "all"} onClick={() => set("plabel")(k)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 999, border: `1px solid ${on ? c : "#E3E6EF"}`, background: on ? c : "#fff", color: on ? "#fff" : "#5B6478", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        {k === "red" || k === "green" ? <span style={{ width: 7, height: 7, borderRadius: 99, background: on ? "#fff" : c }} /> : null}{l}
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="ml-fl">Staff</div>
                 <div style={{ marginBottom: 10 }}><MlPickF icon="fa-user-tie" ph="All staff" value={f.staff} onChange={set("staff")} options={pickOpts(opts?.staff, "Unassigned", "All staff")} label="Staff" /></div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, borderTop: "1px solid #F2F2F6", paddingTop: 11 }}>
@@ -2039,6 +2062,7 @@ function MlLog({ call, reloadKey }) {
           {f.camp ? pill(<>Campaign: <b>{f.camp === "__none" ? "No campaign" : f.camp}</b></>, () => set("camp")("")) : null}
           {f.stage ? pill(<>Stage: <b>{f.stage === "__none" ? "Not created in CRM" : f.stage}</b></>, () => set("stage")("")) : null}
           {f.staff ? pill(<>Staff: <b>{f.staff === "__none" ? "Unassigned" : f.staff}</b></>, () => set("staff")("")) : null}
+          {f.plabel ? pill(<>Proposal: <b>{f.plabel === "__none" ? "No label" : PL_TXT[f.plabel]}</b></>, () => set("plabel")("")) : null}
           <button type="button" className="ph-clear" onClick={clearAll}>Clear all</button>
         </div>
       ) : null}
@@ -2063,7 +2087,7 @@ function MlLog({ call, reloadKey }) {
                         {!x.campaign && !x.adset && !x.form_name ? <span className="mut">—</span> : null}
                       </td>
                       <td><span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 700, color: s.c, background: s.bg, borderRadius: 7, padding: "2px 8px" }}>{s.l}</span>{x.status === "failed" && x.note ? <small className="mut" style={{ display: "block", maxWidth: 240, whiteSpace: "normal" }}>{x.note}</small> : null}</td>
-                      <td>{x.stage || x.staff ? <><b>{x.stage || "—"}</b><small className="mut" style={{ display: "block" }}>{x.staff || "Unassigned"}{x.service ? ` · ${x.service}` : ""}</small></> : <span className="mut">—</span>}{x.lead_id ? <small className="mut" style={{ display: "block" }}>Lead #{x.lead_id}</small> : null}</td>
+                      <td>{x.stage || x.staff ? <><b>{x.stage || "—"}</b>{x.prop_label ? <PlBadge v={x.prop_label} /> : null}<small className="mut" style={{ display: "block" }}>{x.staff || "Unassigned"}{x.service ? ` · ${x.service}` : ""}</small></> : <span className="mut">—</span>}{x.lead_id ? <small className="mut" style={{ display: "block" }}>Lead #{x.lead_id}</small> : null}</td>
                     </tr>
                   );
                 })}
@@ -2084,4 +2108,16 @@ function MlLog({ call, reloadKey }) {
 function MlPickF({ icon, ph, value, onChange, options, label }) {
   const opts = options.map((o) => (o.id === "" ? { ...o, label: ph } : o));
   return <SvcPick value={value} options={opts} onChange={onChange} label={label} changed={!!value} icon={icon} placeholder={`Search ${label.toLowerCase()}...`} />;
+}
+
+/* CRM → Send Proposal ka label: Red (sirf proposal maanga) / Green (client interested) — CRM jaisa hi badge */
+const PL_TXT = { red: "Red label", green: "Green label" };
+function PlBadge({ v }) {
+  const c = v === "red" ? ["#C0392B", "#FDECEA", "#F5C2BC"] : ["#12813F", "#E6F6EC", "#B5E2C4"];
+  return (
+    <span title={v === "red" ? "Client only asked for a proposal" : "Client interested — proposal sent"}
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: c[0], background: c[1], border: `1px solid ${c[2]}`, borderRadius: 999, padding: "1px 8px", whiteSpace: "nowrap", verticalAlign: "middle" }}>
+      <span style={{ width: 7, height: 7, borderRadius: "50%", background: c[0] }} />{PL_TXT[v] || v}
+    </span>
+  );
 }
