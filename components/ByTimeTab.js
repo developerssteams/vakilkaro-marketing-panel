@@ -1554,3 +1554,263 @@ export function ByLeadsTab({ tab }) {
     </div>
   );
 }
+
+/* ============================================================
+   FACEBOOK LEADS → CRM (Lead Capture → "Facebook → CRM")
+
+   CRM ki meta-leads.php ka hi panel wala roop. Sab kuch CRM se:
+     · Page connected? Instant leads (webhook) ON? Last sync, aaj / 7 din
+     · Sync now (kis date se) · Instant leads ON karo
+     · Leads log — har lead ka campaign / ad set / form + CRM me abhi ka
+       stage aur staff · search · CSV
+     · Forms → kaunsi service (mapping) — yahin badlo, CRM me save
+   Panel khud kuch store nahi karta — CRM ka database hi sach hai.
+   ============================================================ */
+const ML_CRM_URL = "https://crm.vakilkaro.com/meta-leads.php";
+const ML_ST = {
+  created: { l: "New lead", c: "#1E8A54", bg: "#E8F6EE" },
+  exists: { l: "Already in CRM", c: "#5B6478", bg: "#F1F3F8" },
+  reengaged: { l: "Repeat", c: "#2a78d6", bg: "#EAF2FD" },
+  dup: { l: "Came before", c: "#5B6478", bg: "#F1F3F8" },
+  skipped: { l: "Skipped", c: "#B7791F", bg: "#FFF6E0" },
+  failed: { l: "Failed", c: "#C0392B", bg: "#FDECEC" },
+};
+const mlWhen = (r) => lrDate(String(r.created_time || r.created_at || ""));
+const mlPlat = (p) => (p === "ig" ? "Instagram" : p === "fb" ? "Facebook" : p ? String(p).toUpperCase() : "");
+
+export function MetaCrmTab({ tab }) {
+  const [d, setD] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState("");
+  const [view, setView] = useState("log");
+  const [fv, setFv] = useState("ads");
+  const [since, setSince] = useState(() => { const x = new Date(); x.setDate(x.getDate() - 1); return iso(x); });
+  const [q, setQ] = useState("");
+  const [st, setSt] = useState("");
+  const [map, setMap] = useState({});
+  const [page, setPage] = useState(1);
+
+  async function call(meta, extra = {}) {
+    const r = await fetch("/api/crm/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ meta, ...extra }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+    return j;
+  }
+  async function load(opts = {}) {
+    setBusy("load"); setErr("");
+    try {
+      const j = await call("status", { fv: opts.fv || fv, refresh: Boolean(opts.refresh), log: 300 });
+      setD(j);
+      setMap(Object.fromEntries((j.forms || []).map((f) => [f.id, f.map])));
+      if (j.fv && j.fv !== (opts.fv || fv)) setFv(j.fv);
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(""); }
+  }
+  useEffect(() => { load(); }, []);
+  useEffect(() => { setPage(1); }, [q, st, d]);
+
+  async function doSync() {
+    setBusy("sync"); setErr(""); setOk("");
+    try {
+      const j = await call("sync", { since });
+      const s = j.stats || {};
+      setOk(`Sync done — ${num(s.seen || 0)} found, ${num(s.created || 0)} new leads in CRM, ${num((s.exists || 0) + (s.reengaged || 0))} already in CRM${s.failed ? `, ${s.failed} failed` : ""}${j.mapped_old ? ` · service set on ${j.mapped_old} older leads` : ""}.`);
+      await load();
+    } catch (e) { setErr(e.message); setBusy(""); }
+  }
+  async function doSubscribe() {
+    setBusy("sub"); setErr(""); setOk("");
+    try { await call("subscribe"); setOk("Instant leads are ON — every new lead now reaches the CRM straight away."); await load(); }
+    catch (e) { setErr(e.message); setBusy(""); }
+  }
+  async function saveMap() {
+    setBusy("map"); setErr(""); setOk("");
+    try {
+      const j = await call("map", { map });
+      setOk(`Form → service mapping saved in the CRM.${j.fixed ? ` Service also set on ${j.fixed} older leads${j.assigned ? ` (${j.assigned} sent to staff)` : ""}.` : ""}`);
+      await load();
+    } catch (e) { setErr(e.message); setBusy(""); }
+  }
+
+  const log = d?.log || [];
+  const list = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return log.filter((r) => (!st || r.status === st) && (!t || `${r.name} ${r.phone} ${r.campaign} ${r.adset} ${r.ad} ${r.form_name} ${r.service} ${r.staff}`.toLowerCase().includes(t)));
+  }, [log, q, st]);
+  const pages = Math.max(1, Math.ceil(list.length / 25));
+  const cur = Math.min(page, pages);
+  const T = d?.today || {}; const W = d?.week || {};
+  const dirty = (d?.forms || []).some((f) => (map[f.id] || "auto") !== (f.map || "auto"));
+  const inputStyle = { flex: 1, minWidth: 0, border: 0, outline: "none", background: "transparent", font: "600 13px var(--font)", color: "#1B2333" };
+  const svcName = (v) => { if (!v || v === "auto") return ""; if (v === "skip") return "Skip"; if (v.startsWith("t:")) return v.slice(2); const s = (d?.services || []).find((x) => `s:${x.id}` === v); return s ? s.name : v; };
+
+  function exportLog() {
+    lrCsv(`vakilkaro-facebook-leads-log.csv`, ["Came at", "Name", "Phone", "Platform", "Campaign", "Ad set", "Ad", "Form", "Result", "Note", "CRM lead ID", "Stage now", "Staff", "Service", "Via"],
+      list.map((r) => [r.created_time || r.created_at, r.name, r.phone, mlPlat(r.platform), r.campaign, r.adset, r.ad, r.form_name, ML_ST[r.status]?.l || r.status, r.note, r.lead_id || "", r.stage || "", r.staff || "", r.service || "", r.via]));
+  }
+
+  const box = (icon, c, bg, title, val, sub, extra) => (
+    <div className="card" style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+      <span style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", background: bg, color: c, flex: "0 0 auto" }}><i className={icon.includes("fa-brands") ? icon : `fa-solid ${icon}`} /></span>
+      <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#5B6478" }}>{title}</span>
+        <b style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={typeof val === "string" ? val : undefined}>{val}</b>
+        {sub ? <small style={{ fontSize: 11.5, color: "#5B6478" }}>{sub}</small> : null}
+      </span>
+      {extra}
+    </div>
+  );
+
+  return (
+    <div className="st">
+      <div className="lf-head">
+        <div className="pg-desc" style={{ marginTop: 0 }}>{tab.description}</div>
+        <div className="lf-acts">
+          {d?.at ? <span className="lf-at"><i className="fa-solid fa-rotate" /> Loaded {new Date(d.at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span> : null}
+          <a className="btn btn-ghost" href={ML_CRM_URL} target="_blank" rel="noreferrer"><i className="fa-solid fa-arrow-up-right-from-square" /> Open in CRM</a>
+          <button type="button" className="btn btn-gold" disabled={!!busy} onClick={() => load()}>
+            <i className={`fa-solid ${busy === "load" ? "fa-spinner fa-spin" : "fa-rotate"}`} /> {busy === "load" ? "Loading from CRM..." : "Refresh"}
+          </button>
+        </div>
+      </div>
+
+      {err ? <div className="lf-err"><i className="fa-solid fa-triangle-exclamation" /> {err}</div> : null}
+      {ok ? <div className="lf-err" style={{ background: "#E8F6EE", borderColor: "#BFE5CF", color: "#1E8A54" }}><i className="fa-solid fa-circle-check" /> {ok}</div> : null}
+
+      {!d ? (
+        <div className="card"><div className="lf-empty"><i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-plug"}`} /><b>{busy ? "Reading from the CRM..." : "Not loaded"}</b><span>{busy ? "Checking the Facebook page, forms and the latest leads." : "Press Refresh."}</span></div></div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 10 }}>
+            {box("fa-brands fa-facebook", d.page ? "#1877F2" : "#C0392B", d.page ? "#EAF2FD" : "#FDECEC", "Facebook Page",
+              d.page ? d.page.name || "Connected" : !d.page_id || !d.has_token ? "Setup pending" : "Not connected",
+              d.page ? `Page ID ${d.page_id}` : d.conn_error || "Add Page ID and token in the CRM")}
+            {box("fa-bolt", d.subscribed ? "#1E8A54" : "#B7791F", d.subscribed ? "#E8F6EE" : "#FFF6E0", "Instant leads",
+              d.page ? (d.subscribed ? "ON" : "OFF") : "—", d.subscribed ? "Leads reach the CRM in seconds" : "Leads wait for sync",
+              d.page && !d.subscribed ? <button type="button" className="btn btn-gold" disabled={!!busy} onClick={doSubscribe}>{busy === "sub" ? <i className="fa-solid fa-spinner fa-spin" /> : "Turn on"}</button> : null)}
+            {box("fa-inbox", "#2a78d6", "#EAF2FD", "Today", `${num(T.created || 0)} new`, `${num((T.exists || 0) + (T.reengaged || 0) + (T.dup || 0))} already in CRM${T.failed ? ` · ${T.failed} failed` : ""}`)}
+            {box("fa-rotate", "#B7791F", "#FFF6E0", "Last sync", d.last_sync ? new Date(d.last_sync * 1000).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "Never", "Backup sync runs every 15 min")}
+          </div>
+
+          <div className="lf-stats" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
+            {["created", "exists", "reengaged", "dup", "skipped", "failed"].map((k) => (
+              <div key={k}><span>{ML_ST[k].l} · 7 days</span><b style={{ color: ML_ST[k].c }}>{num(W[k] || 0)}</b><em>{k === "created" ? "added to CRM" : k === "exists" ? "same phone / email already there" : k === "failed" ? "check the note in the log" : " "}</em></div>
+            ))}
+          </div>
+
+          {d.page ? (
+            <div className="st-filters">
+              <label className="st-sel" style={{ paddingRight: 12 }}><span style={{ fontSize: 12, color: "#646B7E", fontWeight: 600 }}>Pull leads from</span>
+                <input type="date" value={since} max={iso(new Date())} onChange={(e) => setSince(e.target.value)} aria-label="Sync from date" style={inputStyle} /></label>
+              <button type="button" className="btn btn-gold" disabled={!!busy || !since} onClick={doSync}>
+                <i className={`fa-solid ${busy === "sync" ? "fa-spinner fa-spin" : "fa-cloud-arrow-down"}`} /> {busy === "sync" ? "Syncing from Facebook..." : "Sync now"}
+              </button>
+              <span className="lf-at">A lead never comes twice.</span>
+            </div>
+          ) : null}
+
+          <div className="st-filters">
+            {[["log", "fa-clock-rotate-left", `Leads log (${num(log.length)})`], ["forms", "fa-list-check", "Forms → service"]].map(([k, ic, l]) => (
+              <button type="button" key={k} onClick={() => { setView(k); if (k === "forms" && !(d.forms || []).length && d.page) load({ fv }); }}
+                className={`st-sel${view === k ? " on" : ""}`} style={{ cursor: "pointer", font: "inherit" }}><i className={`fa-solid ${ic}`} /> <b style={{ fontWeight: 700 }}>{l}</b></button>
+            ))}
+          </div>
+
+          {view === "log" ? (
+            <section className="card st-card">
+              <div className="st-card-h">
+                <span className="lf-form-ic"><i className="fa-solid fa-clock-rotate-left" /></span>
+                <div style={{ flex: 1, minWidth: 0 }}><b>Leads log</b><small>Latest {num(log.length)} Facebook / Instagram leads · campaign, ad set, form and where the lead is in the CRM now</small></div>
+                <button type="button" className="btn btn-ghost" onClick={exportLog} disabled={!list.length}><i className="fa-solid fa-file-csv" /> CSV</button>
+              </div>
+              <div className="st-filters" style={{ padding: "0 16px 10px" }}>
+                <label className={`st-sel wide${q ? " on" : ""}`} style={{ paddingRight: 10 }}><i className="fa-solid fa-magnifying-glass" />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, phone, campaign, form, staff" aria-label="Search log" style={inputStyle} /></label>
+                <label className={`st-sel${st ? " on" : ""}`}><i className="fa-solid fa-filter" />
+                  <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="Result">
+                    <option value="">All results</option>
+                    {Object.entries(ML_ST).map(([k, v]) => <option key={k} value={k}>{v.l} ({num(log.filter((r) => r.status === k).length)})</option>)}
+                  </select><i className="fa-solid fa-chevron-down st-cv" /></label>
+              </div>
+              {list.length ? (
+                <>
+                  <div className="tbl-scroll">
+                    <table className="mod-table st-t">
+                      <thead><tr><th>Came at</th><th>Lead</th><th>Campaign / ad set / form</th><th>Result</th><th>In CRM now</th></tr></thead>
+                      <tbody>
+                        {list.slice((cur - 1) * 25, cur * 25).map((r) => {
+                          const s = ML_ST[r.status] || { l: r.status, c: "#5B6478", bg: "#F1F3F8" };
+                          return (
+                            <tr key={r.id}>
+                              <td>{mlWhen(r)}<small className="mut" style={{ display: "block" }}>{[r.via, mlPlat(r.platform)].filter(Boolean).join(" · ")}</small></td>
+                              <td><b>{r.name || "—"}</b><small className="mut" style={{ display: "block" }}>{r.phone || "—"}</small></td>
+                              <td style={{ whiteSpace: "normal", minWidth: 220 }}>
+                                {r.campaign ? <span style={{ display: "block", fontWeight: 600 }}><i className="fa-solid fa-bullhorn" style={{ fontSize: 10, color: "#959CAE", marginRight: 6 }} />{r.campaign}</span> : null}
+                                {r.adset ? <small className="mut" style={{ display: "block" }}><i className="fa-solid fa-layer-group" style={{ fontSize: 10, marginRight: 6 }} />{r.adset}</small> : null}
+                                {r.form_name ? <small className="mut" style={{ display: "block" }}><i className="fa-regular fa-rectangle-list" style={{ fontSize: 10, marginRight: 6 }} />{r.form_name}</small> : null}
+                                {!r.campaign && !r.adset && !r.form_name ? <span className="mut">—</span> : null}
+                              </td>
+                              <td><span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 700, color: s.c, background: s.bg, borderRadius: 7, padding: "2px 8px" }}>{s.l}</span>{r.status === "failed" && r.note ? <small className="mut" style={{ display: "block", maxWidth: 240, whiteSpace: "normal" }}>{r.note}</small> : null}</td>
+                              <td>{r.stage || r.staff ? <><b>{r.stage || "—"}</b><small className="mut" style={{ display: "block" }}>{r.staff || "Unassigned"}{r.service ? ` · ${r.service}` : ""}</small></> : <span className="mut">—</span>}{r.lead_id ? <small className="mut" style={{ display: "block" }}>Lead #{r.lead_id}</small> : null}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ padding: "0 18px 14px" }}><TablePager page={cur} pages={pages} total={list.length} onPage={setPage} perPage={25} /></div>
+                </>
+              ) : <div className="lf-empty"><i className="fa-solid fa-inbox" /><b>No leads</b><span>{log.length ? "Nothing matches the search." : "No Facebook lead has come in yet."}</span></div>}
+            </section>
+          ) : (
+            <section className="card st-card">
+              <div className="st-card-h">
+                <span className="lf-form-ic"><i className="fa-solid fa-list-check" /></span>
+                <div style={{ flex: 1, minWidth: 0 }}><b>Which form’s leads go to which service</b><small>“Auto” reads the campaign / form / ad name (NGO, MFC, TM, Resell → NGO Sale Purchase, Pvt, GST). “Skip” keeps that form’s leads out of the CRM.</small></div>
+                <label className="st-sel"><i className="fa-solid fa-eye" />
+                  <select value={fv} onChange={(e) => { setFv(e.target.value); load({ fv: e.target.value }); }} aria-label="Which forms">
+                    <option value="ads">Forms in running ads</option>
+                    <option value="active">All active forms ({num(d.forms_active || 0)})</option>
+                    <option value="all">All forms ({num(d.forms_all || 0)})</option>
+                  </select><i className="fa-solid fa-chevron-down st-cv" /></label>
+                <button type="button" className="btn btn-gold" disabled={!!busy || !dirty} onClick={saveMap}><i className={`fa-solid ${busy === "map" ? "fa-spinner fa-spin" : "fa-floppy-disk"}`} /> Save mapping</button>
+              </div>
+              {!d.ads_ok && d.ads_msg ? <div className="lf-err warn" style={{ margin: "0 16px 10px" }}><i className="fa-solid fa-circle-info" /> Couldn’t read running ads — {d.ads_msg}. Showing all active forms.</div> : null}
+              {(d.forms || []).length ? (
+                <div className="tbl-scroll">
+                  <table className="mod-table st-t">
+                    <thead><tr><th>Form</th><th>Status</th><th className="ta-r">Leads</th><th style={{ minWidth: 280 }}>Service</th></tr></thead>
+                    <tbody>
+                      {d.forms.map((f) => {
+                        const v = map[f.id] || "auto";
+                        return (
+                          <tr key={f.id}>
+                            <td style={{ whiteSpace: "normal", minWidth: 220 }}><b>{f.name}</b><small className="mut" style={{ display: "block" }}>#{f.id}{f.ads ? ` · ${f.ads} running ad${f.ads === 1 ? "" : "s"} · ${f.campaigns.join(", ")}` : ""}</small></td>
+                            <td><span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 700, borderRadius: 7, padding: "2px 8px", ...(String(f.status).toUpperCase() === "ACTIVE" ? { color: "#1E8A54", background: "#E8F6EE" } : { color: "#5B6478", background: "#F1F3F8" }) }}>{String(f.status || "").toLowerCase().replace(/^./, (c) => c.toUpperCase())}</span></td>
+                            <td className="ta-r"><b>{num(f.leads)}</b></td>
+                            <td>
+                              <label className={`st-sel${v !== (f.map || "auto") ? " on" : ""}`} style={{ width: "100%" }}><i className="fa-solid fa-scale-balanced" />
+                                <select value={v} onChange={(e) => setMap((m) => ({ ...m, [f.id]: e.target.value }))} aria-label={`Service for ${f.name}`} style={{ flex: 1, minWidth: 0 }}>
+                                  <option value="auto">Auto{f.auto ? ` (${f.auto})` : " (from campaign name)"}</option>
+                                  <option value="t:NGO Sale Purchase">NGO Sale Purchase</option>
+                                  {(d.services || []).map((s) => <option key={s.id} value={`s:${s.id}`}>{s.name}</option>)}
+                                  <option value="skip">— Skip (keep out of CRM) —</option>
+                                </select><i className="fa-solid fa-chevron-down st-cv" />
+                              </label>
+                              {v !== (f.map || "auto") ? <small style={{ color: "#B7791F", fontWeight: 600 }}>Changed — press Save mapping{svcName(v) ? ` (${svcName(v)})` : ""}</small> : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <div className="lf-empty"><i className="fa-regular fa-rectangle-list" /><b>{busy === "load" ? "Reading forms..." : "No forms here"}</b><span>{!d.page ? "Connect the Facebook page in the CRM first." : fv === "ads" ? "No running ad uses these forms — pick “All active forms”." : "This page has no lead forms."}</span></div>}
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
